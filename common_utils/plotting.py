@@ -272,7 +272,7 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
         plt.ylabel("Normalized events", size=12)
         plt.axis(xmin=xmin, xmax=xmax)
         if scale=='log': plt.yscale('log')
-        hep.atlas.text(loc=0, text='Internal')
+        # hep.atlas.text(loc=0, text='Internal')
     
     
         #Ratio plot

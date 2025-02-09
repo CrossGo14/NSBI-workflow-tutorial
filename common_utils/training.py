@@ -301,7 +301,7 @@ class TrainEvaluate_NN:
                         sample_name=self.sample_name, scale=scale, path_to_figures=self.path_to_figures)
 
 
-    def evaluate_and_save_ratios(self, dataset, out_name):
+    def evaluate_and_save_ratios(self, dataset):
 
         channel_name = self.sample_name[0]
         
@@ -311,7 +311,7 @@ class TrainEvaluate_NN:
 
         path_to_ratios=f'{self.output_dir}/ratios_{self.output_name}/'
 
-        np.save(f"{self.path_to_ratios}ratio_{out_name}_bs{self.batch_size}rnd{str(self.random_state_holdout)}.npy", ratio)
+        np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}_bs{self.batch_size}rnd{str(self.random_state_holdout)}.npy", ratio)
 
 
 def fill_histograms_wError(data, weights, edges, histrange, epsilon, normalize=True):
