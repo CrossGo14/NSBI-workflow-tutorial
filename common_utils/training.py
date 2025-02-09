@@ -38,6 +38,7 @@ from sklearn.metrics import roc_curve, roc_auc_score
 
 import pickle 
 
+import common_utils.plotting
 from common_utils.plotting import plot_calibration_curve, plot_reweighted, plot_loss, fill_histograms_wError
 
 #from common_utils import load_input_samples
@@ -285,6 +286,9 @@ class TrainEvaluate_NN:
 
 
     def make_reweighted_plots(self, variables, scale, num_bins):
+
+        importlib.reload(sys.modules['common_utils.plotting'])
+        from common_utils.plotting import plot_reweighted
 
         plot_reweighted(self.train_data_eval, self.label_0_tpred, 
                         self.w_train_label_0, self.label_1_tpred, self.w_train_label_1,

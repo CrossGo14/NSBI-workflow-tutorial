@@ -286,6 +286,7 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
         abline(0.0,1.0)
 
         plt.savefig(f'{path_to_figures}/reweighted_'+str(variable)+'.png', bbox_inches='tight')
+        plt.show()
         plt.clf()
 
 def plot_overfit(score_1, score_2, w_train, w_test, 
