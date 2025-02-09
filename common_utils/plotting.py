@@ -45,12 +45,13 @@ def plot_loss(history, path_to_figures=""):
     plt.ylabel('loss', size=12)
     plt.xlabel('epoch', size=12)
     plt.legend(['train', 'validation'], loc='upper left')
-
+    plt.show()
     plt.savefig(f'{path_to_figures}/loss_plot.png', bbox_inches='tight')
     plt.clf()
     
     plt.plot(history.history['binary_accuracy'])
     plt.plot(history.history['val_binary_accuracy'])
+    plt.show()
     plt.savefig(f'{path_to_figures}/accuracy_plot.png', bbox_inches='tight')
     plt.clf()
     
@@ -108,7 +109,7 @@ def plot_calibration_curve(data_den, weight_den, data_num, weight_num,
 
     plt.ylabel("Probability ratio", size=12)
     plt.legend(loc='lower right')
-    hep.atlas.text(loc=1, text='Internal')
+    # hep.atlas.text(loc=1, text='Internal')
 
     slopeOne = (edges[:-1] + edges[1:]) / 2
 
@@ -125,7 +126,7 @@ def plot_calibration_curve(data_den, weight_den, data_num, weight_num,
     plt.axis(xmin=xmin, xmax=xmax, ymin=-4.0,ymax= 4.0)
 
     abline(0.0,0.0)
-    plt.plot()
+    plt.show()
     plt.savefig(f'{path_to_figures}/calib_plot_'+str(score_range)+'.png', bbox_inches='tight')
     plt.clf()
 
@@ -176,7 +177,7 @@ def plot_calibration_curve_ratio(data_den, weight_den, data_num, weight_num,
     plt.axis(xmin=xmin, xmax=xmax)
     plt.ylabel("log of MC density ratio", size=12)
     plt.legend(loc='lower right')
-    hep.atlas.text(loc=1, text='Internal')
+    # hep.atlas.text(loc=1, text='Internal')
 
     slopeOne = (edges[:-1] + edges[1:]) / 2
 
@@ -210,8 +211,8 @@ def plot_calibration_curve_ratio(data_den, weight_den, data_num, weight_num,
     plt.axis(xmin=xmin, xmax=xmax, ymin=-4.0,ymax=4.0)
 
     abline(0.0,0.0)
-    plt.plot()
-    plt.savefig(f'{path_to_figures}/calib_plot_llr_'+str(score_range)+'.png', bbox_inches='tight')
+    plt.show()
+    plt.savefig(f'{path_to_figures}/calib_plot_llr.png', bbox_inches='tight')
     plt.clf()
 
 
@@ -227,63 +228,105 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
 
     score = np.ravel(data_den.score)
 
-    weight_den = np.ravel(data_den.weight_kFact)
-    weight_num = np.ravel(data_num.weight_kFact)
+    weight_den = np.ravel(data_den.weights)
+    weight_num = np.ravel(data_num.weights)
 
     rw = weight_den*(score/(1.0-score))
 
-    var_den = np.ravel(data_den[variable])
-    var_num = np.ravel(data_num[variable])
+    for variable in variables:
+        
+        var_den = np.ravel(data_den[variable])
+        var_num = np.ravel(data_num[variable])
+    
+        concat = np.concatenate([var_den, var_num]).flatten()
+        xmin = np.amin(concat)
+        xmax = np.amax(concat)
+    
+        edges = np.linspace(xmin, xmax, num=num+1)
+        histrange = (xmin, xmax)
+    
+        hist_den, hist_den_err = fill_histograms_wError(var_den, rw, edges, histrange, epsilon=1.0e-15)
+        hist_num, hist_num_err = fill_histograms_wError(var_num, weight_num, edges, histrange, epsilon=1.0e-15)
+    
+        hist_deno, hist_deno_err = fill_histograms_wError(var_den, weight_den, edges, histrange, epsilon=1.0e-15)
+        hist_numo, hist_numo_err = fill_histograms_wError(var_num, weight_num, edges, histrange, epsilon=1.0e-15)
+    
+        fig1 = plt.figure(1)
+        frame1=fig1.add_axes((.1,.5,.8,.8),xticklabels=([]))
+    
+        hep.histplot(hist_den, edges, yerr=np.sqrt(hist_den_err), 
+                     label=str(sample_name[1])+'->'+str(sample_name[0])+' rwt', 
+                     linewidth=2.0)
+        
+        hep.histplot(hist_num, edges, yerr=np.sqrt(hist_num_err), 
+                     label=sample_name[0], linewidth=2.0)
+        
+        hep.histplot(hist_deno, edges, yerr=np.sqrt(hist_deno_err), 
+                     label=sample_name[1], linewidth=2.0)
+    
+        # chi_sqrd = np.nansum((hist_den - hist_num)**2/(hist_num_err))
+        # p_val = 1 - stats.chi2.cdf(chi_sqrd, num)
+    
+        plt.title(label, fontsize=12)
+        plt.legend(loc='upper right')
+        plt.ylabel("Normalized events", size=12)
+        plt.axis(xmin=xmin, xmax=xmax)
+        if scale=='log': plt.yscale('log')
+        hep.atlas.text(loc=0, text='Internal')
+    
+    
+        #Ratio plot
+        rat = hist_den/hist_num
+        frame2=fig1.add_axes((0.1,0.1,.8,.4))
+        hep.histplot(rat, edges, yerr = np.abs(rat*np.sqrt((np.sqrt(hist_den_err)/hist_den)**2+(np.sqrt(hist_num_err)/hist_num)**2)), linewidth=2.0)
+        plt.axis(xmin=xmin, xmax=xmax, ymin=0.5, ymax=1.5)
+    
+        plt.xlabel(variable, size=12)
+        plt.ylabel("Ratio        ", size=12)
+        abline(0.0,1.0)
 
-    concat = np.concatenate([var_den, var_num]).flatten()
-    xmin = np.amin(concat)
-    xmax = np.amax(concat)
+        plt.savefig(f'{path_to_figures}/reweighted_'+str(variable)+'.png', bbox_inches='tight')
+        plt.clf()
 
-    edges = np.linspace(xmin, xmax, num=num+1)
-    histrange = (xmin, xmax)
+def plot_overfit(score_1, score_2, w_train, w_test, 
+                 calibration_frac = 0.3, nbins=50, 
+                 plotRange=[0.0,1.0], holdout_index=1, 
+                 label='X', path_to_figures=""):
 
-    hist_den, hist_den_err = fill_histograms_wError(var_den, rw, edges, histrange, epsilon=1.0e-15)
-    hist_num, hist_num_err = fill_histograms_wError(var_num, weight_num, edges, histrange, epsilon=1.0e-15)
+    bins = np.linspace(plotRange[0],plotRange[1],num=nbins)
 
-    hist_deno, hist_deno_err = fill_histograms_wError(var_den, weight_den, edges, histrange, epsilon=1.0e-15)
-    hist_numo, hist_numo_err = fill_histograms_wError(var_num, weight_num, edges, histrange, epsilon=1.0e-15)
+    w_train = w_train/w_train.sum()
+    w_test = w_test/w_test.sum()
+
+    score_1_h, bins = np.histogram(score_1, bins=bins, weights=w_train)
+    score_2_h, bins = np.histogram(score_2, bins=bins, weights=w_test)
+
+    score_1_err, bins = np.histogram(score_1, bins=bins, weights=w_train**2)
+    score_2_err, bins = np.histogram(score_2, bins=bins, weights=w_test**2)
 
     fig1 = plt.figure(1)
-    frame1=fig1.add_axes((.1,.5,.8,.8),xticklabels=([]))
+    frame1=fig1.add_axes((.1,.3,.6,.6),xticklabels=([]))
+    hep.histplot(score_1_h, bins, yerr=np.sqrt(score_1_err), label='Holdout')
+    hep.histplot(score_2_h, bins, yerr=np.sqrt(score_2_err), label='Train')
 
-    hep.histplot(hist_den, edges, yerr=np.sqrt(hist_den_err), 
-                 label=str(sample_name[1])+'->'+str(sample_name[0])+' rwt', 
-                 linewidth=2.0)
-    
-    hep.histplot(hist_num, edges, yerr=np.sqrt(hist_num_err), 
-                 label=sample_name[0], linewidth=2.0)
-    
-    hep.histplot(hist_deno, edges, yerr=np.sqrt(hist_deno_err), 
-                 label=sample_name[1], linewidth=2.0)
-
-    # chi_sqrd = np.nansum((hist_den - hist_num)**2/(hist_num_err))
-    # p_val = 1 - stats.chi2.cdf(chi_sqrd, num)
-
-    plt.title(label, fontsize=12)
+    plt.title("Overfit Plot for "+str(label), fontsize=12)
+    plt.ylabel("Normalized", fontsize=12)
     plt.legend(loc='upper right')
-    plt.ylabel("Normalized "+str(final_state)+" events", size=12)
-    plt.axis(xmin=xmin, xmax=xmax)
-    if scale=='log': plt.yscale('log')
-    hep.atlas.text(loc=0, text='Internal')
+    plt.axis(xmin=0.0, xmax=1.0)
+    # hep.atlas.text(loc=0, text='Internal')
 
+    #Residual plot
+    difference = score_1_h - score_2_h
+    frame2=fig1.add_axes((.1,.1,.6,.2))
+    hep.histplot(difference, bins, yerr = np.sqrt(score_2_err+score_1_err))
+    plt.axis(xmin=0.0, xmax=1.0, ymin=-0.0015, ymax=0.0015)
 
-    #Ratio plot
-    rat = hist_den/hist_num
-    frame2=fig1.add_axes((0.1,0.1,.8,.4))
-    hep.histplot(rat, edges, yerr = np.abs(rat*np.sqrt((np.sqrt(hist_den_err)/hist_den)**2+(np.sqrt(hist_num_err)/hist_num)**2)), linewidth=2.0)
-    plt.axis(xmin=xmin, xmax=xmax, ymin=0.5, ymax=1.5)
-
-    plt.xlabel(variable, size=12)
-    plt.ylabel("Ratio        ", size=12)
-    abline(0.0,1.0)
-    plt.savefig(f'{path_to_figures}/reweighted_'+str(variable)+str(split)+'_'+str(phase_space)+'.png', bbox_inches='tight')
+    plt.xlabel("NN Prediction", fontsize=12)
+    plt.ylabel("Residue        ", size=12)
+    abline(0.0,0.0)
+    plt.savefig(f'{path_to_figures}/overfit_'+str(holdout_index)+'_'+str(label)+'.png', bbox_inches='tight')
+    plt.show()
     plt.clf()
-
 
 
 

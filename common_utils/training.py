@@ -24,8 +24,6 @@ from tensorflow.keras.layers import Input, Dense, Dropout, Layer
 from tensorflow.keras.regularizers import l2
 import mplhep as hep
 import random
-from utilities.calibration import HistogramCalibrator
-from utilities.plotting import plot_calibration_curve
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -39,10 +37,10 @@ from joblib import dump, load
 from sklearn.metrics import roc_curve, roc_auc_score 
 
 import pickle 
-from utilities.calibration import HistogramCalibrator
-from utilities.plotting import plot_calibration_curve, plot_reweighted, plot_loss, fill_histograms_wError
 
-#from Utilities import load_input_samples
+from common_utils.plotting import plot_calibration_curve, plot_reweighted, plot_loss, fill_histograms_wError
+
+#from common_utils import load_input_samples
 import importlib,sys
 
 from sklearn.utils import class_weight
@@ -86,8 +84,8 @@ class TrainEvaluate_NN:
         self.batch_size = batch_size
 
         #HyperParameters for the NN training
-        holdout_num=math.floor(self.features.shape[0]*0.2)
-        train_num=math.floor(self.features.shape[0]*0.8)
+        holdout_num=math.floor(self.dataset.shape[0]*0.2)
+        train_num=math.floor(self.dataset.shape[0]*0.8)
         validation_split = 0.1
 
         data_train, data_holdout, \
@@ -97,8 +95,7 @@ class TrainEvaluate_NN:
                                                         self.weights, 
                                                         test_size=holdout_num, 
                                                         random_state=self.random_state_holdout,
-                                                        stratify=self.train_class)
-
+                                                        stratify=self.train_labels)
 
 
         reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=callback_factor,
@@ -175,24 +172,24 @@ class TrainEvaluate_NN:
         plot_loss(self.history, path_to_figures=self.path_to_figures)
 
         # Redo the split with all the columns in the original dataset
-        self.train_data_eval, self.train_holdout_eval = train_test_split(self.dataset, 
+        self.train_data_eval, self.holdout_data_eval = train_test_split(self.dataset, 
                                                                   test_size=holdout_num, 
                                                                   random_state=self.random_state_holdout,
-                                                                  stratify=self.train_class)
+                                                                  stratify=self.train_labels)
         
         
         
-        self.label_0_hpred = self.predict_with_model(self.train_holdout_eval[label_holdout==0], use_log_loss=self.use_log_loss)
-        self.label_1_hpred = self.predict_with_model(self.train_holdout_eval[label_holdout==1], use_log_loss=self.use_log_loss)
+        self.label_0_hpred = self.predict_with_model(self.holdout_data_eval[label_holdout==0], use_log_loss=self.use_log_loss)
+        self.label_1_hpred = self.predict_with_model(self.holdout_data_eval[label_holdout==1], use_log_loss=self.use_log_loss)
 
-        self.label_0_tpred = self.predict_with_model(self.train_data_eval[label_holdout==0], use_log_loss=self.use_log_loss)
-        self.label_1_tpred = self.predict_with_model(self.train_data_eval[label_holdout==1], use_log_loss=self.use_log_loss)
+        self.label_0_tpred = self.predict_with_model(self.train_data_eval[label_train==0], use_log_loss=self.use_log_loss)
+        self.label_1_tpred = self.predict_with_model(self.train_data_eval[label_train==1], use_log_loss=self.use_log_loss)
         
-        self.w_train_label_0 = self.weight_train[label_train==0].copy()
-        self.w_train_label_1 = self.weight_train[label_train==1].copy()
+        self.w_train_label_0 = weight_train[label_train==0].copy()
+        self.w_train_label_1 = weight_train[label_train==1].copy()
 
-        self.w_holdout_label_0 = self.weight_holdout[label_holdout==0].copy()
-        self.w_holdout_label_1 = self.weight_holdout[label_holdout==1].copy()
+        self.w_holdout_label_0 = weight_holdout[label_holdout==0].copy()
+        self.w_holdout_label_1 = weight_holdout[label_holdout==1].copy()
         
         # Some diagnostics to ensure numerical stability
         print(f"{self.sample_name[1]} training data prediction (max) = "+str(np.amax(self.label_0_tpred)))
@@ -228,11 +225,29 @@ class TrainEvaluate_NN:
         self.model_NN.compile(loss='binary_crossentropy', optimizer=opt)
 
         self.scaler = load(path_to_models+'/model_scaler.bin')
+
+    
+    def predict_with_model(self, data, use_log_loss=False):
+
+        scaled_data = self.scaler.transform(data)
+        pred = self.model_NN.predict(scaled_data, verbose=2)
+        pred = pred.reshape(pred.shape[0],)
+
+        if use_log_loss:
+
+            pred = convert_to_score(pred)
+
+        if self.calibration:
+
+            pred = self.calibrator_obj.cali_pred(pred)
+            pred = pred.reshape(pred.shape[0],)
+
+        return pred
         
 
     def make_overfit_plots(self):
 
-        from utilities.plotting import plot_overfit
+        from common_utils.plotting import plot_overfit
 
         plot_overfit(self.label_0_tpred, self.label_0_hpred, self.w_train_label_0, self.w_holdout_label_0, 
                     calibration_frac = 0.3, nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
@@ -243,27 +258,30 @@ class TrainEvaluate_NN:
                     label=f'{self.sample_name[1]} sample predictions', path_to_figures=self.path_to_figures)
 
 
-    def make_calib_plots(self, nbins=10):
+    def make_calib_plots(self, observable='score', nbins=10):
 
-        # Plot Calibration curves - score function
-        plot_calibration_curve(self.label_0_tpred, self.w_train_label_0, 
-                               self.label_1_tpred, self.w_train_label_1, 
-                               self.label_0_hpred, self.w_holdout_label_0, 
-                               self.label_1_hpred, self.w_holdout_label_1, 
-                               self.path_to_figures, nbins=nbins, 
-                               label="Calibration Curve "+str(self.sample_name[0]),
-                               score_range="standard")
+        if observable=='score':
+            # Plot Calibration curves - score function
+            plot_calibration_curve(self.label_0_tpred, self.w_train_label_0, 
+                                   self.label_1_tpred, self.w_train_label_1, 
+                                   self.label_0_hpred, self.w_holdout_label_0, 
+                                   self.label_1_hpred, self.w_holdout_label_1, 
+                                   self.path_to_figures, nbins=nbins, 
+                                   label="Calibration Curve "+str(self.sample_name[0]))
 
         # Plot Calibration curves - nll function
-        from utilities.plotting import plot_calibration_curve_ratio
+        from common_utils.plotting import plot_calibration_curve_ratio
+        if observable=='llr':
+        
+            plot_calibration_curve_ratio(self.label_0_tpred, self.w_train_label_0, 
+                                         self.label_1_tpred, self.w_train_label_1, 
+                                         self.label_0_hpred, self.w_holdout_label_0, 
+                                         self.label_1_hpred, self.w_holdout_label_1, 
+                                         self.path_to_figures, nbins=nbins, 
+                                         label="Calibration Curve "+str(self.sample_name[0]))
 
-        plot_calibration_curve_ratio(self.label_0_tpred, self.w_train_label_0, 
-                                     self.label_1_tpred, self.w_train_label_1, 
-                                     self.label_0_hpred, self.w_holdout_label_0, 
-                                     self.label_1_hpred, self.w_holdout_label_1, 
-                                     self.path_to_figures, nbins=nbins, 
-                                     label="Calibration Curve "+str(self.sample_name[0]),
-                                     score_range="standard")
+        else:
+            print("observable not recognized")
 
 
     def make_reweighted_plots(self, variables, scale, num_bins):
@@ -271,15 +289,12 @@ class TrainEvaluate_NN:
         plot_reweighted(self.train_data_eval, self.label_0_tpred, 
                         self.w_train_label_0, self.label_1_tpred, self.w_train_label_1,
                         variables=variables, num=num_bins,
-                        sample_name=self.sample_name, scale=scale, 
-                        showUnReweightedPlot=False,
-                        split='Training', 
+                        sample_name=self.sample_name, scale=scale,  
                         path_to_figures=self.path_to_figures)
 
-        plot_reweighted(self.holdout_data_eval, self.label_0_hpred, self.w_0_holdout,self.label_1_hpred, self.w_1_holdout,
+        plot_reweighted(self.holdout_data_eval, self.label_0_hpred, self.w_holdout_label_0,self.label_1_hpred, self.w_holdout_label_1,
                         variables=variables, num=num_bins,
-                        sample_name=self.sample_name, scale=scale, showUnReweightedPlot=False, label='',
-                        final_state='',split='Testing', phase_space=phase_space, path_to_figures=self.path_to_figures)
+                        sample_name=self.sample_name, scale=scale, path_to_figures=self.path_to_figures)
 
 
     def evaluate_and_save_ratios(self, dataset, out_name):
@@ -340,14 +355,14 @@ def build_model(n_hidden=4, n_neurons=1000, learning_rate=0.1,
         model.add(Dense(1,activation='linear',**options))
 
     if optimizer_choice=='Nadam':
-        optimizer = tf.keras.optimizers.Nadam(lr=learning_rate) 
+        optimizer = tf.keras.optimizers.Nadam(learning_rate=learning_rate) 
     elif optimizer_choice=='Adam':
-        optimizer = tf.keras.optimizers.Adam(lr=learning_rate) 
+        optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate) 
 
     if use_log_loss:
-        model.compile(loss=CARL_mod, optimizer=optimizer,weighted_metrics=['binary_accuracy'])
+        model.compile(loss=CARL_mod, optimizer=optimizer, weighted_metrics=['binary_accuracy'])
     else:
-        model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer=optimizer,weighted_metrics=['binary_accuracy'])
+        model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer=optimizer, weighted_metrics=['binary_accuracy'])
     return model
 
 #The modified CARL loss that directly regresses to LLR
