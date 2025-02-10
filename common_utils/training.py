@@ -252,11 +252,11 @@ class TrainEvaluate_NN:
 
         plot_overfit(self.label_0_tpred, self.label_0_hpred, self.w_train_label_0, self.w_holdout_label_0, 
                     calibration_frac = 0.3, nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
-                    label=f'{self.sample_name[0]} sample predictions', path_to_figures=self.path_to_figures)
+                    label=f'{self.sample_name[0]}', path_to_figures=self.path_to_figures)
         
         plot_overfit(self.label_1_tpred, self.label_1_hpred, self.w_train_label_1, self.w_holdout_label_1,
                     calibration_frac = 0.3, nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
-                    label=f'{self.sample_name[1]} sample predictions', path_to_figures=self.path_to_figures)
+                    label=f'{self.sample_name[1]}', path_to_figures=self.path_to_figures)
 
 
     def make_calib_plots(self, observable='score', nbins=10):
