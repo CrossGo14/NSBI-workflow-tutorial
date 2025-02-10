@@ -248,6 +248,7 @@ class TrainEvaluate_NN:
 
     def make_overfit_plots(self):
 
+        importlib.reload(sys.modules['common_utils.plotting'])
         from common_utils.plotting import plot_overfit
 
         plot_overfit(self.label_0_tpred, self.label_0_hpred, self.w_train_label_0, self.w_holdout_label_0, 
@@ -261,6 +262,9 @@ class TrainEvaluate_NN:
 
     def make_calib_plots(self, observable='score', nbins=10):
 
+        importlib.reload(sys.modules['common_utils.plotting'])
+        from common_utils.plotting import plot_calibration_curve, plot_calibration_curve_ratio
+
         if observable=='score':
             # Plot Calibration curves - score function
             plot_calibration_curve(self.label_0_tpred, self.w_train_label_0, 
@@ -268,10 +272,9 @@ class TrainEvaluate_NN:
                                    self.label_0_hpred, self.w_holdout_label_0, 
                                    self.label_1_hpred, self.w_holdout_label_1, 
                                    self.path_to_figures, nbins=nbins, 
-                                   label="Calibration Curve "+str(self.sample_name[0]))
+                                   label="Calibration Curve - "+str(self.sample_name[0]))
 
         # Plot Calibration curves - nll function
-        from common_utils.plotting import plot_calibration_curve_ratio
         if observable=='llr':
         
             plot_calibration_curve_ratio(self.label_0_tpred, self.w_train_label_0, 
@@ -279,7 +282,7 @@ class TrainEvaluate_NN:
                                          self.label_0_hpred, self.w_holdout_label_0, 
                                          self.label_1_hpred, self.w_holdout_label_1, 
                                          self.path_to_figures, nbins=nbins, 
-                                         label="Calibration Curve "+str(self.sample_name[0]))
+                                         label="Calibration Curve - "+str(self.sample_name[0]))
 
         else:
             print("observable not recognized")
@@ -294,11 +297,11 @@ class TrainEvaluate_NN:
                         self.w_train_label_0, self.label_1_tpred, self.w_train_label_1,
                         variables=variables, num=num_bins,
                         sample_name=self.sample_name, scale=scale,  
-                        path_to_figures=self.path_to_figures)
+                        path_to_figures=self.path_to_figures, label='Training Data Diagnostic')
 
         plot_reweighted(self.holdout_data_eval, self.label_0_hpred, self.w_holdout_label_0,self.label_1_hpred, self.w_holdout_label_1,
                         variables=variables, num=num_bins,
-                        sample_name=self.sample_name, scale=scale, path_to_figures=self.path_to_figures)
+                        sample_name=self.sample_name, scale=scale, path_to_figures=self.path_to_figures, label='Holdout Data Diagnostic')
 
 
     def evaluate_and_save_ratios(self, dataset):

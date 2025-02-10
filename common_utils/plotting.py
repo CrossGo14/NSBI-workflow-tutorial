@@ -15,7 +15,7 @@ def abline(slope, intercept):
         axes = plt.gca()
         x_vals = np.array(axes.get_xlim())
         y_vals = intercept + slope * x_vals
-        plt.plot(x_vals, y_vals, '--')
+        plt.plot(x_vals, y_vals, '--', color='gray')
 
 # General method for filling weighted histograms (replace with histogram library?)
 def fill_histograms_wError(data, weights, edges, histrange, epsilon, normalize=True):
@@ -79,7 +79,7 @@ def plot_calibration_curve(data_den, weight_den, data_num, weight_num,
     hist_ratio = hist_num/(hist_den+hist_num)
 
     # Propagate the error 
-    err = hist_ratio**2 * np.abs(hist_den/hist_num) * np.sqrt((hist_num_err/(hist_num)**2)\
+    hist_ratio_err = hist_ratio**2 * np.abs(hist_den/hist_num) * np.sqrt((hist_num_err/(hist_num)**2)\
                                                           +(hist_den_err/(hist_den)**2))
 
     # Repeat for the holdout dataset
@@ -90,39 +90,39 @@ def plot_calibration_curve(data_den, weight_den, data_num, weight_num,
     
     hist_ratio_holdout = hist_num_holdout / ( hist_den_holdout + hist_num_holdout )
 
-    err_holdout = hist_ratio_holdout**2 * np.abs(hist_den_holdout/hist_num_holdout) * np.sqrt((hist_num_holdout_err/(hist_num_holdout)**2)\
+    hist_ratio_err_holdout = hist_ratio_holdout**2 * np.abs(hist_den_holdout/hist_num_holdout) * np.sqrt((hist_num_holdout_err/(hist_num_holdout)**2)\
                                                 +(hist_den_holdout_err/(hist_den_holdout)**2))
 
     fig1 = plt.figure(1)
-    plt.rc('xtick',labelsize=10)
-    frame1=fig1.add_axes((.1,.5,1.5,1.5),xticklabels=([]))
+    plt.rc('xtick',labelsize=18)
+    frame1=fig1.add_axes((.1,.9,.8,.8),xticklabels=([]))
 
-    hep.histplot([hist_ratio, hist_ratio_holdout], bins=edges, yerr=[err, err_holdout], label=['Training', 'Holdout'])
+    hep.histplot([hist_ratio, hist_ratio_holdout], bins=edges, yerr=[hist_ratio_err, hist_ratio_err_holdout], label=['Training', 'Holdout'])
     
     abline(1.0,0.0)
-    plt.title(label, fontsize=12)
+    plt.title(label, fontsize=18)
 
     xmin = np.amin(data)
     xmax = np.amax(data)
 
     plt.axis(xmin=xmin, xmax=xmax, ymax=1.1, ymin=-0.1)
 
-    plt.ylabel("Probability ratio", size=12)
-    plt.legend(loc='lower right')
+    plt.ylabel("Probability ratio", size=18)
+    plt.legend(loc='lower right', fontsize=18)
     # hep.atlas.text(loc=1, text='Internal')
 
     slopeOne = (edges[:-1] + edges[1:]) / 2
 
     #Residual plot
-    residue = (hist_ratio-slopeOne)/err
-    residue_holdout = (hist_ratio_holdout-slopeOne)/err_holdout
-    frame2=fig1.add_axes((.1,.1,1.5,.4))
+    residue = (hist_ratio-slopeOne)/hist_ratio_err
+    residue_holdout = (hist_ratio_holdout-slopeOne)/hist_ratio_err_holdout
+    frame2=fig1.add_axes((.1,.5,.8,.4))
 
     plt.errorbar(slopeOne, residue, yerr=1.0, drawstyle='steps-mid')
     plt.errorbar(slopeOne, residue_holdout, yerr=1.0, drawstyle='steps-mid')
 
-    plt.xlabel("Predicted Score", size=12)
-    plt.ylabel("Residue        ", size=12)
+    plt.xlabel("Predicted Score", size=18)
+    plt.ylabel("Residue", loc="center", size=18)
     plt.axis(xmin=xmin, xmax=xmax, ymin=-4.0,ymax= 4.0)
 
     abline(0.0,0.0)
@@ -163,20 +163,20 @@ def plot_calibration_curve_ratio(data_den, weight_den, data_num, weight_num,
     h_log_holdout_err = np.sqrt((hist_num_holdout_err/hist_num_holdout**2)+(hist_den_holdout_err/hist_den_holdout**2))
 
     fig1 = plt.figure(1)
-    plt.rc('xtick',labelsize=10)
-    plt.rc('xtick',labelsize=10)
+    plt.rc('xtick',labelsize=18)
     frame1=fig1.add_axes((.1,.9,.8,.8),xticklabels=([]))
     hep.histplot([h_log,h_log_holdout], yerr=[h_log_err,h_log_holdout_err], bins=edges, label=['Training','Holdout'])
     
-    plt.plot(edges,edges)
-    plt.title(label, fontsize=12)
+    # plt.plot(edges, edges)
+    abline(1.0,0.0)
+    plt.title(label, fontsize=18)
 
     xmin = np.amin(data)
     xmax = np.amax(data)
 
     plt.axis(xmin=xmin, xmax=xmax)
-    plt.ylabel("log of MC density ratio", size=12)
-    plt.legend(loc='lower right')
+    plt.ylabel("log of MC density ratio", size=18)
+    plt.legend(loc='lower right', fontsize=18)
     # hep.atlas.text(loc=1, text='Internal')
 
     slopeOne = (edges[:-1] + edges[1:]) / 2
@@ -193,7 +193,7 @@ def plot_calibration_curve_ratio(data_den, weight_den, data_num, weight_num,
     plt.errorbar(slopeOne, ratio, yerr=ratio_err, drawstyle='steps-mid')
     plt.errorbar(slopeOne, ratio_holdout, yerr=ratio_err_holdout, drawstyle='steps-mid')
 
-    plt.ylabel("Ratio     ", size=12)
+    plt.ylabel("Ratio", loc="center", size=18)
     plt.axis(xmin=xmin, xmax=xmax, ymin=0.5,ymax= 1.5)
 
     abline(0.0,1.0)
@@ -206,8 +206,8 @@ def plot_calibration_curve_ratio(data_den, weight_den, data_num, weight_num,
     plt.errorbar(slopeOne, residue, yerr=1.0, drawstyle='steps-mid')
     plt.errorbar(slopeOne, residue_holdout, yerr=1.0, drawstyle='steps-mid')
 
-    plt.xlabel("Predicted log of density ratio", size=12)
-    plt.ylabel("Residue        ", size=12)
+    plt.xlabel("Predicted log of density ratio", size=18)
+    plt.ylabel("Residue", loc="center", size=18)
     plt.axis(xmin=xmin, xmax=xmax, ymin=-4.0,ymax=4.0)
 
     abline(0.0,0.0)
@@ -267,9 +267,9 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
         # chi_sqrd = np.nansum((hist_den - hist_num)**2/(hist_num_err))
         # p_val = 1 - stats.chi2.cdf(chi_sqrd, num)
     
-        plt.title(label, fontsize=12)
-        plt.legend(loc='upper right')
-        plt.ylabel("Normalized events", size=12)
+        plt.title(label, fontsize=18)
+        plt.legend(loc='upper right', fontsize=18)
+        plt.ylabel("Normalized events", size=18)
         plt.axis(xmin=xmin, xmax=xmax)
         if scale=='log': plt.yscale('log')
         # hep.atlas.text(loc=0, text='Internal')
@@ -281,8 +281,8 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
         hep.histplot(rat, edges, yerr = np.abs(rat*np.sqrt((np.sqrt(hist_den_err)/hist_den)**2+(np.sqrt(hist_num_err)/hist_num)**2)), linewidth=2.0)
         plt.axis(xmin=xmin, xmax=xmax, ymin=0.5, ymax=1.5)
     
-        plt.xlabel(variable, size=12)
-        plt.ylabel("Ratio        ", size=12)
+        plt.xlabel(variable, size=18)
+        plt.ylabel("Ratio", loc='center', size=18)
         abline(0.0,1.0)
 
         plt.savefig(f'{path_to_figures}/reweighted_'+str(variable)+'.png', bbox_inches='tight')
@@ -310,9 +310,9 @@ def plot_overfit(score_1, score_2, w_train, w_test,
     hep.histplot(score_1_h, bins, yerr=np.sqrt(score_1_err), label='Holdout')
     hep.histplot(score_2_h, bins, yerr=np.sqrt(score_2_err), label='Train')
 
-    plt.title("Overfit Plot for "+str(label), fontsize=12)
-    plt.ylabel("Normalized", fontsize=12)
-    plt.legend(loc='upper right')
+    plt.title("Overfit Plot for "+str(label), fontsize=18)
+    plt.ylabel("Normalized", fontsize=18)
+    plt.legend(loc='upper right', fontsize=18)
     plt.axis(xmin=0.0, xmax=1.0)
     # hep.atlas.text(loc=0, text='Internal')
 
@@ -322,8 +322,8 @@ def plot_overfit(score_1, score_2, w_train, w_test,
     hep.histplot(difference, bins, yerr = np.sqrt(score_2_err+score_1_err))
     plt.axis(xmin=0.0, xmax=1.0, ymin=-0.0015, ymax=0.0015)
 
-    plt.xlabel("NN Prediction", fontsize=12)
-    plt.ylabel("Residue        ", size=12)
+    plt.xlabel("NN Prediction", fontsize=18)
+    plt.ylabel("Residue", loc="center", size=18)
     abline(0.0,0.0)
     plt.savefig(f'{path_to_figures}/overfit_'+str(holdout_index)+'_'+str(label)+'.png', bbox_inches='tight')
     plt.show()
