@@ -19,6 +19,7 @@ from tensorflow.keras.layers import Dense, BatchNormalization
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.callbacks import ModelCheckpoint
 import tensorflow.keras.backend as K
+from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense, Dropout, Layer
 from tensorflow.keras.regularizers import l2
@@ -49,7 +50,91 @@ from joblib import dump, load
 
 from tensorflow.keras.models import model_from_json
 
+class TrainEvaluatePreselNN:
+    
+    def __init__(self, dataset, columns, columns_scaling):
+        
+        self.dataset = dataset
+        self.data_features_training = dataset[columns].copy()
+        self.train_labels = dataset['train_labels_presel']
+        self.weight_normed = dataset['weights_normed']
+        self.columns = columns
+        self.columns_scaling = columns_scaling
 
+    # Defining a simple NN training for preselection - no need for "flexibility" here
+    def train(self, test_size=0.15, random_state=42, path_to_save=''):
+
+        # Split data into training and validation sets (including weights)
+        X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
+                                                                                    self.train_labels, 
+                                                                                    self.weight_normed, 
+                                                                                    test_size=test_size, 
+                                                                                    random_state=random_state, 
+                                                                                    stratify=self.train_labels)
+
+        # Standardize the input features
+        self.scaler = StandardScaler()
+        X_train = self.scaler.fit_transform(X_train)  # Fit & transform training data
+        X_val = self.scaler.transform(X_val)
+        
+        # Define the neural network model
+        self.model = keras.Sequential([
+            layers.Input(shape=(self.data_features_training.shape[1],)),  # Input layer
+            layers.Dense(100, activation='swish'),
+            layers.Dense(100, activation='swish'),
+            layers.Dense(100, activation='swish'),
+            layers.Dense(3, activation='softmax')  # Output layer for 5 classes
+        ])
+        
+        # Compile the model
+        self.model.compile(optimizer='nadam',
+                      loss='sparse_categorical_crossentropy',
+                      weighted_metrics=["accuracy"])
+        
+        # Train the model with sample weights
+        self.model.fit(X_train, y_train, sample_weight=weight_train, 
+                  validation_data=(X_val, y_val, weight_val), epochs=20, batch_size=1024)
+
+        if path_to_save!='':
+
+            if not os.path.exists(path_to_save):
+                os.makedirs(path_to_save)
+    
+            model_json = self.model.to_json()
+            with open(path_to_save+"model_arch.json", "w") as json_file:
+                json_file.write(model_json)
+    
+            # serialize weights to HDF5
+            self.model.save_weights(path_to_save+"model_weights.h5")
+
+            saved_scaler = path_to_save+"model_scaler.bin"
+            dump(self.scaler, saved_scaler, compress=True)
+
+
+    def get_trained_model(self, path_to_models):
+
+        json_file = open(path_to_models+'/model_arch_presel.json', "r")
+
+        loaded_model_json = json_file.read()
+
+        json_file.close()
+
+        self.model = model_from_json(loaded_model_json)
+
+        self.model.load_weights(path_to_models+'/model_weights_presel.h5')
+
+        self.model.compile(loss='sparse_categorical_crossentropy', optimizer='nadam')
+
+        self.scaler = load(path_to_models+'/model_scaler_presel.bin')
+
+
+    def predict(self, dataset):
+
+        features_scaled = self.scaler.transform(dataset[self.columns])
+        pred_NN = self.model.predict(features_scaled)
+        return pred_NN
+    
+        
 
 class TrainEvaluate_NN:
 
