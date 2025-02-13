@@ -80,12 +80,12 @@ class TrainEvaluatePreselNN:
         # Define the neural network model
         self.model = keras.Sequential([
             layers.Input(shape=(self.data_features_training.shape[1],)),  # Input layer
-            layers.Dense(100, activation='swish'),
-            layers.Dense(100, activation='swish'),
-            layers.Dense(100, activation='swish'),
+            layers.Dense(1000, activation='swish'),
+            layers.Dense(1000, activation='swish'),
             layers.Dense(3, activation='softmax')  # Output layer for 5 classes
         ])
-        
+
+        optimizer = tf.keras.optimizers.Nadam(learning_rate=0.1)
         # Compile the model
         self.model.compile(optimizer='nadam',
                       loss='sparse_categorical_crossentropy',
