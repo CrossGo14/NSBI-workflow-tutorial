@@ -73,7 +73,8 @@ class TrainEvaluatePreselNN:
                                                                                     stratify=self.train_labels)
 
         # Standardize the input features
-        self.scaler = StandardScaler()
+        # self.scaler = StandardScaler()
+        self.scaler = ColumnTransformer([("scaler", MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
         X_train = self.scaler.fit_transform(X_train)  # Fit & transform training data
         X_val = self.scaler.transform(X_val)
         
@@ -101,13 +102,13 @@ class TrainEvaluatePreselNN:
                 os.makedirs(path_to_save)
     
             model_json = self.model.to_json()
-            with open(path_to_save+"model_arch.json", "w") as json_file:
+            with open(path_to_save+"model_arch_presel.json", "w") as json_file:
                 json_file.write(model_json)
     
             # serialize weights to HDF5
-            self.model.save_weights(path_to_save+"model_weights.h5")
+            self.model.save_weights(path_to_save+"model_weights_presel.h5")
 
-            saved_scaler = path_to_save+"model_scaler.bin"
+            saved_scaler = path_to_save+"model_scaler_presel.bin"
             dump(self.scaler, saved_scaler, compress=True)
 
 
@@ -191,15 +192,15 @@ class TrainEvaluate_NN:
 
 
         if (scalerType == 'MinMax'):
-            self.scaler = ColumnTransformer([("scaler1",MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
+            self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
         if (scalerType == 'StandardScaler'):
-            self.scaler = ColumnTransformer([("scaler1",StandardScaler(), self.columns_scaling)],remainder='passthrough')
+            self.scaler = ColumnTransformer([("scaler",StandardScaler(), self.columns_scaling)],remainder='passthrough')
         if (scalerType == 'PowerTransform_Yeo'):
-            self.scaler = ColumnTransformer([("scaler1",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
+            self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
         if (scalerType == 'RobustScaler'):
-            self.scaler = ColumnTransformer([("scaler1",RobustScaler(unit_variance=True), self.columns_scaling)],remainder='passthrough')
+            self.scaler = ColumnTransformer([("scaler",RobustScaler(unit_variance=True), self.columns_scaling)],remainder='passthrough')
         if (scalerType == 'QuantileTransformer'):
-            self.scaler = ColumnTransformer([("scaler1",QuantileTransformer(output_distribution='normal'), self.columns_scaling)],remainder='passthrough')
+            self.scaler = ColumnTransformer([("scaler",QuantileTransformer(output_distribution='normal'), self.columns_scaling)],remainder='passthrough')
 
 
         scaled_data_train = self.scaler.fit_transform(data_train)
@@ -259,9 +260,9 @@ class TrainEvaluate_NN:
 
         # Redo the split with all the columns in the original dataset
         self.train_data_eval, self.holdout_data_eval = train_test_split(self.dataset, 
-                                                                  test_size=holdout_num, 
-                                                                  random_state=self.random_state_holdout,
-                                                                  stratify=self.train_labels)
+                                                                        test_size=holdout_num, 
+                                                                        random_state=self.random_state_holdout,
+                                                                        stratify=self.train_labels)
         
         
         
