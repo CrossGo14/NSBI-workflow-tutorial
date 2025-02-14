@@ -1,11 +1,21 @@
-# A simplified workflow for Neural Simulation-Based Inference
+# Neural Simulation-Based Inference Workflow demonstration
 
-A simple and significantly scaled-down tutorial demonstrating the end-to-end workflow used in the off-shell Higgs boson analysis published by ATLAS. 
+The notebooks presented here aim to serve as a scaled-down and simplified tutorial for the workflow building related to the NSBI analysis recently published by ATLAS:
 
-The workflow currently uses the ttbar open data released by CMS, more open datasets will be added in the future. A more complete workflow with systematic uncertainties and ensemble training will also be added.
+- An implementation of neural simulation-based inference for parameter estimation in ATLAS (https://arxiv.org/pdf/2412.01600)
+- Measurement of off-shell Higgs boson production in the $H\to ZZ \to 4\ell$ decay channel using a neural simulation-based inference technique in 13 TeV p-p collisions with the ATLAS detector (https://arxiv.org/pdf/2412.01548)
+
+![NLL_PE_ExpOnly_PEHist_Comp](https://github.com/user-attachments/assets/5aba909b-efc5-4a66-b171-9aa2c8c4d6f4) ![NLL_PE_ObsExp_StatSyst_Comp](https://github.com/user-attachments/assets/3c518b0b-90cb-4bcc-8830-a2783777010f)
+
+The aim is to demonstrate the workflow associated with a full-scale LHC analysis. The physics results presented in the notebooks only serve as examples of the workflow.
+
+**Note: The tutorial is a significantly scaled down and incomplete version of the original workflow. More complete versions will follow!**
+
+The workflow currently uses the ttbar open data released by CMS, more open datasets will be added in the future. A more complete version with systematic uncertainties and ensemble training will also be added.
 
 Workflow bluprint (**tentative**):
 
-![Jay_NSBI_flow 001](https://github.com/user-attachments/assets/d026194e-d870-43d2-bd90-1111f8651bbf)
+![NSBI_flowchart](https://github.com/user-attachments/assets/0aba882f-e604-4181-b1fc-ae51b344124c)
+
 
 
