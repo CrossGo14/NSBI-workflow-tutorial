@@ -1,4 +1,5 @@
-# NSBI_workflow_tutorial
+# A simplified workflow for Neural Simulation-Based Inference
+
 A simple tutorial demonstrating the end-to-end workflow used in the off-shell Higgs boson analysis published by ATLAS. The workflow currently uses the ttbar open data released by CMS, more open datasets will be added in the future.
 
 Workflow bluprint (**tentative**):
