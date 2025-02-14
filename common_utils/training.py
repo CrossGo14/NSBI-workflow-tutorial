@@ -1,5 +1,5 @@
 #import libraries
-import os
+import os, importlib,sys
 import numpy as np
 import pandas as pd
 import math
@@ -22,7 +22,6 @@ import tensorflow.keras.backend as K
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense, Dropout, Layer
-from tensorflow.keras.regularizers import l2
 import mplhep as hep
 import random
 
@@ -41,9 +40,6 @@ import pickle
 
 import common_utils.plotting
 from common_utils.plotting import plot_calibration_curve, plot_reweighted, plot_loss, fill_histograms_wError
-
-#from common_utils import load_input_samples
-import importlib,sys
 
 from sklearn.utils import class_weight
 from joblib import dump, load
@@ -153,12 +149,20 @@ class TrainEvaluate_NN:
         self.sample_name = sample_name
         self.output_dir = output_dir
         self.output_name = output_name
-        self.path_to_figures = path_to_figures
-        self.path_to_models = path_to_models
-
-        self.path_to_ratios=path_to_ratios
         self.use_log_loss = use_log_loss
         self.split_using_fold = split_using_fold
+        
+        self.path_to_figures = path_to_figures
+        if not os.path.exists(path_to_figures):
+                os.makedirs(path_to_figures)
+            
+        self.path_to_models = path_to_models
+        if not os.path.exists(path_to_models):
+                os.makedirs(path_to_models)
+
+        self.path_to_ratios=path_to_ratios
+        if not os.path.exists(path_to_ratios):
+                os.makedirs(path_to_ratios)
         
 
     def train(self, hidden_layers, neurons, number_of_epochs, batch_size,
@@ -171,8 +175,8 @@ class TrainEvaluate_NN:
         self.batch_size = batch_size
 
         #HyperParameters for the NN training
-        holdout_num=math.floor(self.dataset.shape[0]*0.2)
-        train_num=math.floor(self.dataset.shape[0]*0.8)
+        holdout_num   = math.floor(self.dataset.shape[0]*0.2)
+        train_num     = math.floor(self.dataset.shape[0]*0.8)
         validation_split = 0.1
 
         data_train, data_holdout, \
@@ -233,7 +237,7 @@ class TrainEvaluate_NN:
                                                 verbose=2)
 
         else:
-            print("Nor Using Callbacks - Systematic Uncertainties?")
+            print("Not Using Callbacks")
 
             self.history = self.model_NN.fit(scaled_data_train, label_train, 
                                                 epochs=number_of_epochs, batch_size=batch_size, 
@@ -264,32 +268,36 @@ class TrainEvaluate_NN:
                                                                         random_state=self.random_state_holdout,
                                                                         stratify=self.train_labels)
         
-        
-        
-        self.label_0_hpred = self.predict_with_model(self.holdout_data_eval[label_holdout==0], use_log_loss=self.use_log_loss)
-        self.label_1_hpred = self.predict_with_model(self.holdout_data_eval[label_holdout==1], use_log_loss=self.use_log_loss)
 
-        self.label_0_tpred = self.predict_with_model(self.train_data_eval[label_train==0], use_log_loss=self.use_log_loss)
-        self.label_1_tpred = self.predict_with_model(self.train_data_eval[label_train==1], use_log_loss=self.use_log_loss)
+        holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
+
+        self.label_0_hpred = holdout_data_prediction[label_holdout==0].copy()
+        self.label_1_hpred = holdout_data_prediction[label_holdout==1].copy()
+
+        self.w_holdout_label_0 = weight_holdout[label_holdout==0].copy()
+        self.w_holdout_label_1 = weight_holdout[label_holdout==1].copy()
+
+        train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+
+        self.label_0_tpred = train_data_prediction[label_train==0].copy()
+        self.label_1_tpred = train_data_prediction[label_train==1].copy()
         
         self.w_train_label_0 = weight_train[label_train==0].copy()
         self.w_train_label_1 = weight_train[label_train==1].copy()
 
-        self.w_holdout_label_0 = weight_holdout[label_holdout==0].copy()
-        self.w_holdout_label_1 = weight_holdout[label_holdout==1].copy()
         
-        # Some diagnostics to ensure numerical stability
+        # Some diagnostics to ensure numerical stability - min/max must not be exactly 0 or 1
         print(f"{self.sample_name[1]} training data prediction (max) = "+str(np.amax(self.label_0_tpred)))
         print(f"{self.sample_name[1]} training data prediction (min) = "+str(np.amin(self.label_0_tpred)))
 
         print(f"{self.sample_name[0]} training data prediction (max) = "+str(np.amax(self.label_1_tpred)))
         print(f"{self.sample_name[0]} training data prediction (min) = "+str(np.amin(self.label_1_tpred)))
 
-        print(f"{self.sample_name[1]} training data prediction (max) = "+str(np.amax(self.label_0_hpred)))
-        print(f"{self.sample_name[1]} training data prediction (min) = "+str(np.amin(self.label_0_hpred)))
+        print(f"{self.sample_name[1]} holdout data prediction (max) = "+str(np.amax(self.label_0_hpred)))
+        print(f"{self.sample_name[1]} holdout data prediction (min) = "+str(np.amin(self.label_0_hpred)))
 
-        print(f"{self.sample_name[0]} training data prediction (max) = "+str(np.amax(self.label_1_hpred)))
-        print(f"{self.sample_name[0]} training data prediction (min) = "+str(np.amin(self.label_1_hpred)))
+        print(f"{self.sample_name[0]} holdout data prediction (max) = "+str(np.amax(self.label_1_hpred)))
+        print(f"{self.sample_name[0]} holdout data prediction (min) = "+str(np.amin(self.label_1_hpred)))
 
 
 
