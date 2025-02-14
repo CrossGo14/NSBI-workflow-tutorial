@@ -109,13 +109,13 @@ def plot_calibration_curve(data_den, weight_den, data_num, weight_num,
 
     plt.ylabel("Probability ratio", size=18)
     plt.legend(loc='lower right', fontsize=18)
-    # hep.atlas.text(loc=1, text='Internal')
 
     slopeOne = (edges[:-1] + edges[1:]) / 2
 
     #Residual plot
     residue = (hist_ratio-slopeOne)/hist_ratio_err
     residue_holdout = (hist_ratio_holdout-slopeOne)/hist_ratio_err_holdout
+    
     frame2=fig1.add_axes((.1,.5,.8,.4))
 
     plt.errorbar(slopeOne, residue, yerr=1.0, drawstyle='steps-mid')
