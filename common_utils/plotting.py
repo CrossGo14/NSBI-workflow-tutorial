@@ -220,18 +220,27 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
                     path_to_figures="", num=15, variables=['NN_MELA_incl_disc'], 
                     sample_name=['Bkg','Ref'], 
                     scale="linear", label='w/o Calibration'):
-      
+
+    # Separate the dataset into numerator p_c and denominator p_ref hypothesis
     data_den = dataset[dataset.train_labels==0].copy()
     data_den['score'] = score_den
     data_num = dataset[dataset.train_labels==1].copy()
     data_num['score'] = score_num
 
-    score = np.ravel(data_den.score)
-
+    # Get the original weights
     weight_den = np.ravel(data_den.weights)
     weight_num = np.ravel(data_num.weights)
 
-    rw = weight_den*(score/(1.0-score))
+    # Get the NN estimated score for the p_ref hypothesis
+    score_den = np.ravel(data_den.score)
+    ratio_den = score_den / (1.0 - score_den)
+
+    # Calculate the reweighted weights for reference
+    den_to_num_rwt = weight_den * ratio_den
+    
+    # Determine the number of rows of figures needed
+    num_vars = len(variables)
+    num_rows = (num_vars + 1) // 2  
 
     for variable in variables:
         
@@ -245,7 +254,7 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
         edges = np.linspace(xmin, xmax, num=num+1)
         histrange = (xmin, xmax)
     
-        hist_den, hist_den_err = fill_histograms_wError(var_den, rw, edges, histrange, epsilon=1.0e-15)
+        hist_den, hist_den_err = fill_histograms_wError(var_den, den_to_num_rwt, edges, histrange, epsilon=1.0e-15)
         hist_num, hist_num_err = fill_histograms_wError(var_num, weight_num, edges, histrange, epsilon=1.0e-15)
     
         hist_deno, hist_deno_err = fill_histograms_wError(var_den, weight_den, edges, histrange, epsilon=1.0e-15)

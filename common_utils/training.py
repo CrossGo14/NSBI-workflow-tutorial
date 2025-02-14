@@ -385,9 +385,11 @@ class TrainEvaluate_NN:
                         sample_name=self.sample_name, scale=scale,  
                         path_to_figures=self.path_to_figures, label='Training Data Diagnostic')
 
-        plot_reweighted(self.holdout_data_eval, self.label_0_hpred, self.w_holdout_label_0,self.label_1_hpred, self.w_holdout_label_1,
+        plot_reweighted(self.holdout_data_eval, self.label_0_hpred, 
+                        self.w_holdout_label_0,self.label_1_hpred, self.w_holdout_label_1,
                         variables=variables, num=num_bins,
-                        sample_name=self.sample_name, scale=scale, path_to_figures=self.path_to_figures, label='Holdout Data Diagnostic')
+                        sample_name=self.sample_name, scale=scale, 
+                        path_to_figures=self.path_to_figures, label='Holdout Data Diagnostic')
 
 
     def evaluate_and_save_ratios(self, dataset):
