@@ -3,5 +3,6 @@ A simple tutorial demonstrating the end-to-end workflow used in the off-shell Hi
 
 Workflow bluprint (**tentative**):
 
+![Jay_NSBI_flow 001](https://github.com/user-attachments/assets/d026194e-d870-43d2-bd90-1111f8651bbf)
 
-<img width="1822" alt="flowchart_irishep_NSBI" src="https://github.com/user-attachments/assets/b4d3e730-a782-4551-9352-8121e771a32f" />
+
