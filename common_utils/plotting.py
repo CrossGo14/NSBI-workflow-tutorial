@@ -17,8 +17,8 @@ def abline(slope, intercept):
         y_vals = intercept + slope * x_vals
         plt.plot(x_vals, y_vals, '--', color='gray')
 
-# General method for filling weighted histograms (replace with histogram library?)
-def fill_histograms_wError(data, weights, edges, histrange, epsilon, normalize=True):
+# General method for filling weighted histograms 
+def fill_histograms_wError(data, weights, edges, histrange, normalize=True):
         
     h, _ = np.histogram(data, edges, histrange, weights=weights)
     
@@ -71,9 +71,9 @@ def plot_calibration_curve(data_den, weight_den, data_num, weight_num,
 
     # Fill the histograms of score function 
     hist_den, hist_den_err = fill_histograms_wError(data_den, weight_den, 
-                                                    edges, histrange, epsilon)
+                                                    edges, histrange)
     hist_num, hist_num_err = fill_histograms_wError(data_num, weight_num, 
-                                                    edges, histrange, epsilon)
+                                                    edges, histrange)
 
     # Calculate the bin-by-bin frequency (equivalent of NN output score function)
     hist_ratio = hist_num/(hist_den+hist_num)
@@ -84,9 +84,9 @@ def plot_calibration_curve(data_den, weight_den, data_num, weight_num,
 
     # Repeat for the holdout dataset
     hist_den_holdout, hist_den_holdout_err = fill_histograms_wError(data_den_holdout, weight_den_holdout, 
-                                                                    edges, histrange, epsilon)
+                                                                    edges, histrange)
     hist_num_holdout, hist_num_holdout_err = fill_histograms_wError(data_num_holdout, weight_num_holdout, 
-                                                                    edges, histrange, epsilon)
+                                                                    edges, histrange)
     
     hist_ratio_holdout = hist_num_holdout / ( hist_den_holdout + hist_num_holdout )
 
@@ -150,14 +150,14 @@ def plot_calibration_curve_ratio(data_den, weight_den, data_num, weight_num,
     histrange = (xmin,xmax)
 
     # Bin the log-likelihood ratios
-    hist_den, hist_den_err = fill_histograms_wError(data_den, weight_den, edges, histrange, epsilon)
-    hist_num, hist_num_err = fill_histograms_wError(data_num, weight_num, edges, histrange, epsilon)
+    hist_den, hist_den_err = fill_histograms_wError(data_den, weight_den, edges, histrange)
+    hist_num, hist_num_err = fill_histograms_wError(data_num, weight_num, edges, histrange)
     
     h_log = np.log(hist_num/hist_den)
     h_log_err = np.sqrt((hist_num_err/hist_num**2)+(hist_den_err/hist_den**2))
  
-    hist_den_holdout, hist_den_holdout_err = fill_histograms_wError(data_den_holdout, weight_den_holdout, edges, histrange, epsilon)
-    hist_num_holdout, hist_num_holdout_err = fill_histograms_wError(data_numH, weight_numH, edges, histrange, epsilon)
+    hist_den_holdout, hist_den_holdout_err = fill_histograms_wError(data_den_holdout, weight_den_holdout, edges, histrange)
+    hist_num_holdout, hist_num_holdout_err = fill_histograms_wError(data_numH, weight_numH, edges, histrange)
     
     h_log_holdout = np.log(hist_num_holdout/hist_den_holdout)
     h_log_holdout_err = np.sqrt((hist_num_holdout_err/hist_num_holdout**2)+(hist_den_holdout_err/hist_den_holdout**2))
@@ -254,11 +254,11 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
         edges = np.linspace(xmin, xmax, num=num+1)
         histrange = (xmin, xmax)
     
-        hist_den, hist_den_err = fill_histograms_wError(var_den, den_to_num_rwt, edges, histrange, epsilon=1.0e-15)
-        hist_num, hist_num_err = fill_histograms_wError(var_num, weight_num, edges, histrange, epsilon=1.0e-15)
+        hist_den, hist_den_err = fill_histograms_wError(var_den, den_to_num_rwt, edges, histrange)
+        hist_num, hist_num_err = fill_histograms_wError(var_num, weight_num, edges, histrange)
     
-        hist_deno, hist_deno_err = fill_histograms_wError(var_den, weight_den, edges, histrange, epsilon=1.0e-15)
-        hist_numo, hist_numo_err = fill_histograms_wError(var_num, weight_num, edges, histrange, epsilon=1.0e-15)
+        hist_deno, hist_deno_err = fill_histograms_wError(var_den, weight_den, edges, histrange)
+        hist_numo, hist_numo_err = fill_histograms_wError(var_num, weight_num, edges, histrange)
     
         fig1 = plt.figure(1)
         frame1=fig1.add_axes((.1,.5,.8,.8),xticklabels=([]))
