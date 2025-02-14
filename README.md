@@ -26,7 +26,7 @@ The workflow currently uses the ttbar open data released by CMS, more open datas
 
 Workflow bluprint (**tentative**):
 
-![NSBI_flowchart](attachment:d0e4894d-60bd-4cb3-8202-1ee02d378262.jpeg)
+![NSBI_flowchart](https://github.com/user-attachments/assets/98c6ebbe-c9d2-49fb-bc98-2b8f3b27b1e1)
 
 
 
