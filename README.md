@@ -24,9 +24,17 @@ The aim is to demonstrate the workflow associated with a full-scale LHC analysis
 
 The workflow currently uses the ttbar open data released by CMS, more open datasets will be added in the future. A more complete version with systematic uncertainties and ensemble training will also be added.
 
+## Building a general toolkit for NSBI at the LHC (Work in Progress)
+
 Workflow bluprint (**tentative**):
 
 ![NSBI_flowchart](https://github.com/user-attachments/assets/98c6ebbe-c9d2-49fb-bc98-2b8f3b27b1e1)
 
+## Acknowledgements
+
+[![NSF-1836650](https://img.shields.io/badge/NSF-1836650-blue.svg)](https://nsf.gov/awardsearch/showAward?AWD_ID=1836650)
+[![PHY-2323298](https://img.shields.io/badge/PHY-2323298-blue.svg)](https://nsf.gov/awardsearch/showAward?AWD_ID=2323298)
+
+This work was supported by the U.S. National Science Foundation (NSF) cooperative agreements [OAC-1836650](https://nsf.gov/awardsearch/showAward?AWD_ID=1836650) and [PHY-2323298](https://nsf.gov/awardsearch/showAward?AWD_ID=2323298) (IRIS-HEP).
 
 
