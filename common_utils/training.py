@@ -58,7 +58,7 @@ class TrainEvaluatePreselNN:
         self.columns_scaling = columns_scaling
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
-    def train(self, test_size=0.15, random_state=42, path_to_save=''):
+    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024):
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
@@ -90,7 +90,7 @@ class TrainEvaluatePreselNN:
         
         # Train the model with sample weights
         self.model.fit(X_train, y_train, sample_weight=weight_train, 
-                  validation_data=(X_val, y_val, weight_val), epochs=20, batch_size=1024)
+                  validation_data=(X_val, y_val, weight_val), epochs=epochs, batch_size=batch_size)
 
         if path_to_save!='':
 
@@ -131,6 +131,38 @@ class TrainEvaluatePreselNN:
         pred_NN = self.model.predict(features_scaled)
         return pred_NN
     
+
+# Under construction
+# class TrainEnsemble:
+
+#     def __init__(self, num_NNs, dataset, weights, train_labels, columns, columns_scaling, 
+#                  sample_name, output_dir, output_name, path_to_figures='',
+#                      path_to_models='', path_to_ratios='',
+#                      use_log_loss=False, split_using_fold=False):
+
+#         self.NN_training_instances = {}
+#         self.num_NNs = num_NNs
+
+#         for num in range(num_NNs):
+            
+#             rnd_seed = random.randint(0, 100000)
+#             self.NN_training_instances[num] = TrainEvaluate_NN(dataset, weights, train_labels, columns, columns_scaling, 
+#                                                               rnd_seed, sample_name, output_dir, output_name, path_to_figures='',
+#                                                               path_to_models='', path_to_ratios='',
+#                                                               use_log_loss=False, split_using_fold=False)
+
+#     def train_ensemble(self, hidden_layers, neurons, number_of_epochs, batch_size,
+#              learning_rate, scalerType, calibration=False, 
+#              num_bins_cal = 40, callback = True, 
+#              callback_patience=30, callback_factor=0.01,
+#              activation='swish'):
+
+
+#         for num in range(num_NNs):
+#             self.NN_training_instances[num].train(
+
+#         print("nothing")
+
         
 
 class TrainEvaluate_NN:
@@ -171,7 +203,7 @@ class TrainEvaluate_NN:
              callback_patience=30, callback_factor=0.01,
              activation='swish'):
 
-        self.calibration = calibration
+        self.calibration = calibration # Calibration capabilities coming soon
         self.batch_size = batch_size
 
         #HyperParameters for the NN training
