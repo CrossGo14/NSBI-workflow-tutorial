@@ -130,38 +130,6 @@ class TrainEvaluatePreselNN:
         features_scaled = self.scaler.transform(dataset[self.columns])
         pred_NN = self.model.predict(features_scaled)
         return pred_NN
-    
-
-# Under construction
-# class TrainEnsemble:
-
-#     def __init__(self, num_NNs, dataset, weights, train_labels, columns, columns_scaling, 
-#                  sample_name, output_dir, output_name, path_to_figures='',
-#                      path_to_models='', path_to_ratios='',
-#                      use_log_loss=False, split_using_fold=False):
-
-#         self.NN_training_instances = {}
-#         self.num_NNs = num_NNs
-
-#         for num in range(num_NNs):
-            
-#             rnd_seed = random.randint(0, 100000)
-#             self.NN_training_instances[num] = TrainEvaluate_NN(dataset, weights, train_labels, columns, columns_scaling, 
-#                                                               rnd_seed, sample_name, output_dir, output_name, path_to_figures='',
-#                                                               path_to_models='', path_to_ratios='',
-#                                                               use_log_loss=False, split_using_fold=False)
-
-#     def train_ensemble(self, hidden_layers, neurons, number_of_epochs, batch_size,
-#              learning_rate, scalerType, calibration=False, 
-#              num_bins_cal = 40, callback = True, 
-#              callback_patience=30, callback_factor=0.01,
-#              activation='swish'):
-
-
-#         for num in range(num_NNs):
-#             self.NN_training_instances[num].train(
-
-#         print("nothing")
 
         
 
@@ -201,7 +169,7 @@ class TrainEvaluate_NN:
              learning_rate, scalerType, calibration=False, 
              num_bins_cal = 40, callback = True, 
              callback_patience=30, callback_factor=0.01,
-             activation='swish'):
+             activation='swish', verbose=2, ensemble_index=''):
 
         self.calibration = calibration # Calibration capabilities coming soon
         self.batch_size = batch_size
@@ -266,7 +234,7 @@ class TrainEvaluate_NN:
             self.history = self.model_NN.fit(scaled_data_train, label_train, callbacks=[reduce_lr, es], 
                                                 epochs=number_of_epochs, batch_size=batch_size, 
                                                 validation_split=validation_split, sample_weight=weight_train, 
-                                                verbose=2)
+                                                verbose=verbose)
 
         else:
             print("Not Using Callbacks")
@@ -274,21 +242,20 @@ class TrainEvaluate_NN:
             self.history = self.model_NN.fit(scaled_data_train, label_train, 
                                                 epochs=number_of_epochs, batch_size=batch_size, 
                                                 validation_split=validation_split, sample_weight=weight_train, 
-                                                verbose=2)
+                                                verbose=verbose)
         
 
         print("Finished Training")
 
-
-        saved_scaler = self.path_to_models+"model_scaler.bin"
+        saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
         print(saved_scaler)
 
         model_json = self.model_NN.to_json()
-        with open(self.path_to_models+"model_arch.json", "w") as json_file:
+        with open(f"{self.path_to_models}model_arch{ensemble_index}.json", "w") as json_file:
             json_file.write(model_json)
 
         # serialize weights to HDF5
-        self.model_NN.save_weights(self.path_to_models+"model_weights.h5")
+        self.model_NN.save_weights(f"{self.path_to_models}model_weights{ensemble_index}.h5")
 
         dump(self.scaler, saved_scaler, compress=True)
 
@@ -319,17 +286,21 @@ class TrainEvaluate_NN:
 
         
         # Some diagnostics to ensure numerical stability - min/max must not be exactly 0 or 1
-        print(f"{self.sample_name[1]} training data prediction (max) = "+str(np.amax(self.label_0_tpred)))
-        print(f"{self.sample_name[1]} training data prediction (min) = "+str(np.amin(self.label_0_tpred)))
+        min_max_values = [
+            (self.sample_name[1], "training", np.amin(self.label_0_tpred), np.amax(self.label_0_tpred)),
+            (self.sample_name[0], "training", np.amin(self.label_1_tpred), np.amax(self.label_1_tpred)),
+            (self.sample_name[1], "holdout", np.amin(self.label_0_hpred), np.amax(self.label_0_hpred)),
+            (self.sample_name[0], "holdout", np.amin(self.label_1_hpred), np.amax(self.label_1_hpred))
+        ]
+        
+        for name, dataset, min_val, max_val in min_max_values:
+            
+            if min_val == 0:
+                print(f"WARNING: {name} {dataset} data has min score = 0, which may indicate numerical instability!")
+            
+            if min_val == 0:
+                print(f"WARNING: {name} {dataset} data has max score = 1, which may indicate numerical instability!")
 
-        print(f"{self.sample_name[0]} training data prediction (max) = "+str(np.amax(self.label_1_tpred)))
-        print(f"{self.sample_name[0]} training data prediction (min) = "+str(np.amin(self.label_1_tpred)))
-
-        print(f"{self.sample_name[1]} holdout data prediction (max) = "+str(np.amax(self.label_0_hpred)))
-        print(f"{self.sample_name[1]} holdout data prediction (min) = "+str(np.amin(self.label_0_hpred)))
-
-        print(f"{self.sample_name[0]} holdout data prediction (max) = "+str(np.amax(self.label_1_hpred)))
-        print(f"{self.sample_name[0]} holdout data prediction (min) = "+str(np.amin(self.label_1_hpred)))
 
 
 
