@@ -52,8 +52,6 @@ class TrainEvaluatePreselNN:
         
         self.dataset = dataset
         self.data_features_training = dataset[columns].copy()
-        self.train_labels = dataset['train_labels_presel']
-        self.weight_normed = dataset['weights_normed']
         self.columns = columns
         self.columns_scaling = columns_scaling
 
@@ -62,11 +60,11 @@ class TrainEvaluatePreselNN:
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
-                                                                                    self.train_labels, 
-                                                                                    self.weight_normed, 
+                                                                                    self.dataset['train_labels_presel'], 
+                                                                                    self.dataset['weights_normed'], 
                                                                                     test_size=test_size, 
                                                                                     random_state=random_state, 
-                                                                                    stratify=self.train_labels)
+                                                                                    stratify=self.dataset['train_labels_presel'])
 
         # Standardize the input features
         # self.scaler = StandardScaler()
