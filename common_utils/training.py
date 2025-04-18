@@ -411,9 +411,8 @@ class TrainEvaluate_NN:
 
         ratio = score_pred/(1.0-score_pred)
 
-        path_to_ratios=f'{self.output_dir}/ratios_{self.output_name}/'
-
-        np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}_bs{self.batch_size}rnd{str(self.random_state_holdout)}.npy", ratio)
+        # np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}_bs{self.batch_size}rnd{str(self.random_state_holdout)}.npy", ratio)
+        np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio)
 
 
 def fill_histograms_wError(data, weights, edges, histrange, epsilon, normalize=True):
