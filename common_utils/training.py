@@ -56,7 +56,7 @@ class TrainEvaluatePreselNN:
         self.columns_scaling = columns_scaling
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
-    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024):
+    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024, verbose=2):
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
@@ -88,7 +88,7 @@ class TrainEvaluatePreselNN:
         
         # Train the model with sample weights
         self.model.fit(X_train, y_train, sample_weight=weight_train, 
-                  validation_data=(X_val, y_val, weight_val), epochs=epochs, batch_size=batch_size)
+                  validation_data=(X_val, y_val, weight_val), epochs=epochs, batch_size=batch_size, verbose=verbose)
 
         if path_to_save!='':
 
