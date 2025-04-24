@@ -18,7 +18,7 @@ The notebooks presented here aim to serve as a scaled-down and simplified tutori
 <br/>
 <br/>
 
-The aim is to demonstrate the workflow associated with a full-scale LHC analysis. The physics results presented in the notebooks only serve as examples of the workflow. The code in this tutorial is derived from the original ATLAS analysis code written by Jay Sandesara, R.D. Schaffer and Arnaud Maury.
+The aim is to demonstrate the workflow associated with a full-scale LHC analysis. The physics results presented in the notebooks only serve as examples of the workflow. The code in this tutorial is partially derived from the original ATLAS analysis code written by Jay Sandesara [[git](https://github.com/JaySandesara)], R.D. Schaffer [[git](https://gitlab.cern.ch/schaffer)] and Arnaud Maury [[git](https://github.com/Maury98)].
 
 **Note: The tutorial is a significantly scaled down and incomplete version of the original workflow. More complete versions will follow!**
 
