@@ -52,21 +52,19 @@ class TrainEvaluatePreselNN:
         
         self.dataset = dataset
         self.data_features_training = dataset[columns].copy()
-        self.train_labels = dataset['train_labels_presel']
-        self.weight_normed = dataset['weights_normed']
         self.columns = columns
         self.columns_scaling = columns_scaling
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
-    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024):
+    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024, verbose=2):
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
-                                                                                    self.train_labels, 
-                                                                                    self.weight_normed, 
+                                                                                    self.dataset['train_labels_presel'], 
+                                                                                    self.dataset['weights_normed'], 
                                                                                     test_size=test_size, 
                                                                                     random_state=random_state, 
-                                                                                    stratify=self.train_labels)
+                                                                                    stratify=self.dataset['train_labels_presel'])
 
         # Standardize the input features
         # self.scaler = StandardScaler()
@@ -90,7 +88,7 @@ class TrainEvaluatePreselNN:
         
         # Train the model with sample weights
         self.model.fit(X_train, y_train, sample_weight=weight_train, 
-                  validation_data=(X_val, y_val, weight_val), epochs=epochs, batch_size=batch_size)
+                  validation_data=(X_val, y_val, weight_val), epochs=epochs, batch_size=batch_size, verbose=verbose)
 
         if path_to_save!='':
 
