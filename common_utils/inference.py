@@ -17,23 +17,24 @@ from iminuit import Minuit
 class nsbi_inference:
 
     def __init__(self, channels_binned, channels_unbinned, asimov_param_vec, num_unconstrained_params, 
-                all_processes, fixed_processes, floating_processes, process_index, nu_channels, 
-                ratios, weights, hist_channels, list_params_all):
+                all_processes, fixed_processes, floating_processes, process_index, 
+                ratios, ratio_variations, weights, data_hist_channel, hist_channels, hist_channel_variations, list_params_all):
 
         self.num_unconstrained_params       = num_unconstrained_params
-        self.NP_initial_values              = jnp.array(np.array(asimov_param_vec)[num_unconstrained_params:])
         self.all_processes                  = all_processes
         self.fixed_processes                = fixed_processes
         self.floating_processes             = floating_processes
         self.process_index                  = process_index
-        self.nu_channels                    = nu_channels
         self.ratios                         = ratios
         self.weights                        = weights
         self.channels_binned                = channels_binned
         self.channels_unbinned              = channels_unbinned
         self.asimov_param_vec               = asimov_param_vec
+        self.data_hist_channel              = data_hist_channel
         self.hist_channels                  = hist_channels
+        self.hist_channel_variations        = hist_channel_variations
         self.list_params_all                = list_params_all
+        self.ratio_variations               = ratio_variations
 
     # poynomial interpolation, same as HistFactory
     def poly_interp(self, tuple_input):
@@ -71,7 +72,7 @@ class nsbi_inference:
         return jnp.where(alpha>1.0, (varUp)**alpha, (varDown)**(-alpha)) - 1.0
 
     # loop over systematic uncertainty variations to calculate net effect
-    def calculate_combined_var(self, param_vec, combined_var_up, combined_var_down):
+    def calculate_combined_var(self, Nparam_vec, combined_var_up, combined_var_down):
 
         def calculate_variations(carry, param_val):
             
@@ -87,10 +88,10 @@ class nsbi_inference:
             return combined_var_array_alpha, None
 
         # Prepare loop_tuple for jax.lax.scan 
-        loop_tuple = (param_vec, combined_var_up, combined_var_down)
+        loop_tuple = (Nparam_vec, combined_var_up, combined_var_down)
 
         # Loop over systematic variations to calculate net effect
-        combined_var_array, _ = jax.lax.scan(calculate_variations, self.NP_initial_values, loop_tuple)
+        combined_var_array, _ = jax.lax.scan(calculate_variations, jnp.ones_like(combined_var_up[0]), loop_tuple)
 
         return combined_var_array
 
@@ -135,48 +136,48 @@ class nsbi_inference:
         self.hist_vars = {}
         for channel in self.channels_binned:
 
-            # Trivially removing alpha dependence for first tests
             self.hist_vars[channel] = {}
             for process in self.all_processes:
-                 self.hist_vars[channel][process] = jnp.ones_like(self.hist_channels[channel][process])
+
+                self.hist_vars[channel][process] = self.calculate_combined_var(param_vec[self.num_unconstrained_params:], 
+                                                                                self.hist_channel_variations[channel][process]['up'],
+                                                                                self.hist_channel_variations[channel][process]['down'])             
 
             nu_hist_channel = self.calculate_parameterized_yields(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
-            asimov_hist_channel = self.calculate_parameterized_yields(self.asimov_param_vec, 
-                                                                        self.hist_channels[channel], 
-                                                                        self.hist_vars[channel])
+            data_hist_channel = self.data_hist_channel[channel]
 
-            llr_tot += self.pois_loglikelihood(asimov_hist_channel, nu_hist_channel)
+            llr_tot += self.pois_loglikelihood(data_hist_channel, nu_hist_channel)
 
-        self.nu_channels_var = {}
         self.ratio_vars = {}
         for channel in self.channels_unbinned:
 
             # Trivially removing alpha dependence for first tests
-            self.nu_channels_var[channel] = {}
+            self.hist_vars[channel] = {}
             self.ratio_vars[channel] = {}
             for process in self.all_processes:
-                self.nu_channels_var[channel][process]   = jnp.ones_like(self.nu_channels[channel][process])
-                self.ratio_vars[channel][process]        = jnp.ones_like(self.ratios[channel][process])
+                self.hist_vars[channel][process]   = self.calculate_combined_var(param_vec[self.num_unconstrained_params:], 
+                                                                                self.hist_channel_variations[channel][process]['up'],
+                                                                                self.hist_channel_variations[channel][process]['down'])
+                self.ratio_vars[channel][process]  = self.calculate_combined_var(param_vec[self.num_unconstrained_params:], 
+                                                                                self.ratio_variations[channel][process]['up'],
+                                                                                self.ratio_variations[channel][process]['down'])
 
             nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
-                                                                  self.nu_channels[channel], 
-                                                                  self.nu_channels_var[channel])
+                                                                  self.hist_channels[channel], 
+                                                                  self.hist_vars[channel])
 
-            asimov_tot_unbinned = self.calculate_parameterized_yields(self.asimov_param_vec, 
-                                                                        self.nu_channels[channel], 
-                                                                        self.nu_channels_var[channel])
+            data_hist_channel = self.data_hist_channel[channel]
 
-            llr_tot += self.pois_loglikelihood(asimov_tot_unbinned, nu_tot_unbinned)
+            llr_tot += self.pois_loglikelihood(data_hist_channel, nu_tot_unbinned)
 
-            llr_pe = self.calculate_parameterized_ratios(param_vec, self.nu_channels[channel], 
+            llr_pe = self.calculate_parameterized_ratios(param_vec, self.hist_channels[channel], 
                                                         self.ratios[channel], self.ratio_vars[channel]) \
                     - jnp.log(nu_tot_unbinned)
 
             llr_tot += jnp.sum(jnp.multiply(self.weights, -2 * llr_pe))
-            # llr_tot += 0
 
         llr_tot += jnp.sum(param_vec[self.num_unconstrained_params:]**2)
 
