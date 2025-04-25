@@ -12,15 +12,28 @@ from tensorflow.keras.optimizers import Nadam
 import mplhep as hep
 import pickle
 import matplotlib.pyplot as plt
+from iminuit import Minuit
 
 class nsbi_inference:
 
-    def __init__(self, num_unconstrained_params, NP_initial_values, all_processes):
+    def __init__(self, channels_binned, channels_unbinned, asimov_param_vec, num_unconstrained_params, 
+                all_processes, fixed_processes, floating_processes, process_index, nu_channels, 
+                ratios, weights, hist_channels, list_params_all):
 
         self.num_unconstrained_params       = num_unconstrained_params
-        self.NP_initial_values              = NP_initial_values
+        self.NP_initial_values              = jnp.array(np.array(asimov_param_vec)[num_unconstrained_params:])
         self.all_processes                  = all_processes
-
+        self.fixed_processes                = fixed_processes
+        self.floating_processes             = floating_processes
+        self.process_index                  = process_index
+        self.nu_channels                    = nu_channels
+        self.ratios                         = ratios
+        self.weights                        = weights
+        self.channels_binned                = channels_binned
+        self.channels_unbinned              = channels_unbinned
+        self.asimov_param_vec               = asimov_param_vec
+        self.hist_channels                  = hist_channels
+        self.list_params_all                = list_params_all
 
     # poynomial interpolation, same as HistFactory
     def poly_interp(self, tuple_input):
@@ -82,11 +95,111 @@ class nsbi_inference:
         return combined_var_array
 
     # parameterized yields calculation
-    def calculate_parameterized_yields(param_vec, hist_yields, hist_vars):
+    def calculate_parameterized_yields(self, param_vec, hist_yields, hist_vars):
 
         nu_tot = 0.0
 
-        for process in self.all_processes:
+        for process in self.floating_processes:
 
-            nu_tot = param_vec[process_index[process]] * hist_yields[process] * hist_vars[process]
+            # This will not work in the general case where model is non-linear in POI, needs modifications (TO-DO)
+            nu_tot += param_vec[self.process_index[process]] * hist_yields[process] * hist_vars[process]
+
+        for process in self.fixed_processes:
+            nu_tot += hist_yields[process] * hist_vars[process]
+
+        return nu_tot
+
+    # parameterized log-likelihood ratio calculation
+    def calculate_parameterized_ratios(self, param_vec, nu_nominal, ratios, ratio_vars):
+
+        dnu_dx = jnp.zeros_like(self.weights)
+
+        for process in self.floating_processes:
+            dnu_dx += param_vec[self.process_index[process]] * nu_nominal[process] * ratios[process] * ratio_vars[process]
+
+        for process in self.fixed_processes:
+            dnu_dx += nu_nominal[process] * ratios[process] * ratio_vars[process]
+            
+        return jnp.log( dnu_dx )
+
+    # Compute the poisson likelihood ratio
+    def pois_loglikelihood(self, data_hist, nu_hist):
+
+        return -2 * jnp.sum( data_hist * jnp.log(nu_hist) - nu_hist)
+
+    # compute the full summed log-likelihood
+    def full_nll_function(self, param_vec):
+
+        llr_tot = 0.0
+
+        self.hist_vars = {}
+        for channel in self.channels_binned:
+
+            # Trivially removing alpha dependence for first tests
+            self.hist_vars[channel] = {}
+            for process in self.all_processes:
+                 self.hist_vars[channel][process] = jnp.ones_like(self.hist_channels[channel][process])
+
+            nu_hist_channel = self.calculate_parameterized_yields(param_vec, 
+                                                                  self.hist_channels[channel], 
+                                                                  self.hist_vars[channel])
+
+            asimov_hist_channel = self.calculate_parameterized_yields(self.asimov_param_vec, 
+                                                                        self.hist_channels[channel], 
+                                                                        self.hist_vars[channel])
+
+            llr_tot += self.pois_loglikelihood(asimov_hist_channel, nu_hist_channel)
+
+        self.nu_channels_var = {}
+        self.ratio_vars = {}
+        for channel in self.channels_unbinned:
+
+            # Trivially removing alpha dependence for first tests
+            self.nu_channels_var[channel] = {}
+            self.ratio_vars[channel] = {}
+            for process in self.all_processes:
+                self.nu_channels_var[channel][process]   = jnp.ones_like(self.nu_channels[channel][process])
+                self.ratio_vars[channel][process]        = jnp.ones_like(self.ratios[channel][process])
+
+            nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
+                                                                  self.nu_channels[channel], 
+                                                                  self.nu_channels_var[channel])
+
+            asimov_tot_unbinned = self.calculate_parameterized_yields(self.asimov_param_vec, 
+                                                                        self.nu_channels[channel], 
+                                                                        self.nu_channels_var[channel])
+
+            llr_tot += self.pois_loglikelihood(asimov_tot_unbinned, nu_tot_unbinned)
+
+            llr_pe = self.calculate_parameterized_ratios(param_vec, self.nu_channels[channel], 
+                                                        self.ratios[channel], self.ratio_vars[channel]) \
+                    - jnp.log(nu_tot_unbinned)
+
+            llr_tot += jnp.sum(jnp.multiply(self.weights, -2 * llr_pe))
+            # llr_tot += 0
+
+        llr_tot += jnp.sum(param_vec[self.num_unconstrained_params:]**2)
+
+        return llr_tot
+
+
+    def perform_fit(self):
+
+        m = Minuit(jax.jit(self.full_nll_function), self.asimov_param_vec, 
+                    grad=jax.jit(jax.grad(self.full_nll_function)), name=tuple(self.list_params_all))
+        m.errordef = Minuit.LEAST_SQUARES
+        strategy = 0
+        # strategy = 2
+        m.strategy = strategy
+        mg = m.migrad()
+        print(f'fit: \n {mg}')
+
+            
+
+
+
+
+
+
+
 
