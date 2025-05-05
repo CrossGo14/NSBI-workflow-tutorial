@@ -184,16 +184,37 @@ class nsbi_inference:
         return llr_tot
 
 
-    def perform_fit(self):
+    def perform_fit(self, fit_strategy=2):
 
         m = Minuit(jax.jit(self.full_nll_function), self.asimov_param_vec, 
                     grad=jax.jit(jax.grad(self.full_nll_function)), name=tuple(self.list_params_all))
         m.errordef = Minuit.LEAST_SQUARES
-        strategy = 0
-        # strategy = 2
+        strategy = 2
         m.strategy = strategy
         mg = m.migrad()
         print(f'fit: \n {mg}')
+
+
+    def plot_NLL_scan(self, parameter_name, parameter_label='', bound_range=(0.0, 3.0), fit_strategy=2, isConstrainedNP=False):
+
+        m = Minuit(jax.jit(self.full_nll_function), self.asimov_param_vec, 
+                    grad=jax.jit(jax.grad(self.full_nll_function)), name=tuple(self.list_params_all))
+        m.errordef = Minuit.LEAST_SQUARES
+        strategy = 2
+        m.strategy = strategy
+        scan_points, NLL_value, _ = m.mnprofile(parameter_name, bound=bound_range, subtract_min=True)
+        plt.plot(scan_points, NLL_value)
+        if not isConstrainedNP:
+            plt.axis(ymin=0.0)
+        else:
+            plt.axis(ymin=0.0, ymax=2.0) # Constrained NPs should be bounded by +-1 uncertainty
+        if parameter_label=='':
+            parameter_label = parameter_name
+        plt.xlabel(parameter_label)
+        if isConstrainedNP:
+            plt.ylabel(r"$t_\alpha$")
+        else:
+            plt.ylabel(r"$t_\mu$")
 
             
 
