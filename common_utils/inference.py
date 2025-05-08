@@ -111,7 +111,7 @@ class nsbi_inference:
         return nu_tot
 
     # parameterized log-likelihood ratio calculation
-    def calculate_parameterized_ratios(self, param_vec, nu_nominal, ratios, ratio_vars):
+    def calculate_parameterized_ratios(self, param_vec, nu_nominal, nu_vars, ratios, ratio_vars):
 
         dnu_dx = jnp.zeros_like(self.weights)
 
@@ -173,7 +173,7 @@ class nsbi_inference:
 
             llr_tot += self.pois_loglikelihood(data_hist_channel, nu_tot_unbinned)
 
-            llr_pe = self.calculate_parameterized_ratios(param_vec, self.hist_channels[channel], 
+            llr_pe = self.calculate_parameterized_ratios(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
                                                         self.ratios[channel], self.ratio_vars[channel]) \
                     - jnp.log(nu_tot_unbinned)
 

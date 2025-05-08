@@ -400,6 +400,15 @@ class TrainEvaluate_NN:
                         sample_name=self.sample_name, scale=scale, 
                         path_to_figures=self.path_to_figures, label='Holdout Data Diagnostic')
 
+    def test_normalization(self):
+
+        # Normalized reference (denominator) hypothesis
+        weight_ref = self.weights[self.train_labels==0].copy()
+
+        ratio_rwt = self.predict_with_model(self.dataset[self.columns], use_log_loss=self.use_log_loss)[self.train_labels==0].copy()
+
+        print(f"The sum of PDFs is {np.sum(ratio_rwt * weight_ref)}")
+
 
     def evaluate_and_save_ratios(self, dataset):
 
@@ -409,7 +418,6 @@ class TrainEvaluate_NN:
 
         ratio = score_pred/(1.0-score_pred)
 
-        # np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}_bs{self.batch_size}rnd{str(self.random_state_holdout)}.npy", ratio)
         np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio)
 
 
