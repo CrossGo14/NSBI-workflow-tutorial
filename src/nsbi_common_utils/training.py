@@ -50,12 +50,13 @@ from tensorflow.keras.models import model_from_json
 
 class TrainEvaluatePreselNN:
     
-    def __init__(self, dataset, columns, columns_scaling):
+    def __init__(self, dataset, num_classes, columns, columns_scaling):
         
         self.dataset = dataset
         self.data_features_training = dataset[columns].copy()
         self.columns = columns
         self.columns_scaling = columns_scaling
+        self.num_classes = num_classes
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
     def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024, verbose=2):
@@ -79,7 +80,7 @@ class TrainEvaluatePreselNN:
             layers.Input(shape=(self.data_features_training.shape[1],)),  # Input layer
             layers.Dense(1000, activation='swish'),
             layers.Dense(1000, activation='swish'),
-            layers.Dense(3, activation='softmax')  # Output layer for 5 classes
+            layers.Dense(self.num_classes, activation='softmax')  # Output layer for 5 classes
         ])
 
         optimizer = tf.keras.optimizers.Nadam(learning_rate=0.1)
