@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nsbi-common-utils"
+dynamic = ["version"]
+description = 'common utilities for Nsbi'
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "jsandesa", email = "jay.ajitbhai.sandesara@cern.ch" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = ["numpy"]
+
+[project.urls]
+Documentation = "https://github.com/jsandesa/nsbi-common-utils#readme"
+Issues = "https://github.com/jsandesa/nsbi-common-utils/issues"
+Source = "https://github.com/jsandesa/nsbi-common-utils"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/nsbi_common_utils/_version.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/nsbi_common_utils tests}"
+
+[tool.coverage.run]
+source_pkgs = ["nsbi_common_utils", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/nsbi_common_utils/__about__.py",
+]
+
+[tool.coverage.paths]
+nsbi_common_utils = ["src/nsbi_common_utils"]
+tests = ["tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]

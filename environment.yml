@@ -4,7 +4,6 @@ channels:
 dependencies:
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
-  - _x86_64-microarch-level=4=2_x86_64_v4
   - anyio=4.8.0=pyhd8ed1ab_0
   - argon2-cffi=23.1.0=pyhd8ed1ab_1
   - argon2-cffi-bindings=21.2.0=py311h9ecbd09_5
@@ -165,6 +164,7 @@ dependencies:
     - coffea==0.7.25
     - ipython==8.32.0
     - jax==0.4.13
+    - iminuit==2.31.1
     - jaxlib==0.4.13
     - joblib==1.4.2
     - pyhf==0.7.6
