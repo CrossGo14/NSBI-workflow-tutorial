@@ -59,7 +59,7 @@ The workflow currently uses the ttbar open data released by CMS, more open datas
 
 ## Library
 
-To use the general library `nsbi_common_utils` developed here in general cases outside of this tutorial, do:
+To use the library `nsbi_common_utils` developed here in general cases outside of this tutorial, do:
 
 ```console
 python -m pip install --upgrade 'nsbi-common-utils @ git+https://github.com/iris-hep/NSBI-workflow-tutorial.git'
