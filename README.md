@@ -11,18 +11,21 @@
 
 ## Setup
 
-Start by creating and loading a base conda environment using the `environment.yml` file:
+Start by creating and activating a conda environment using the provided `environment.yml` environment configuration file:
 
 ```console
 conda env create -f environment.yml
 conda activate NSBI
 ```
 
-Now, load the custom library `nsbi_common_utils`:
+Now, install the custom `nsbi-common-utils` library into the NSBI conda environment:
+
 ```console
-pip install .
+python -m pip install .
 ```
-This should be followed by creating a Jupyter kernel using the conda environment:
+
+This should be followed by creating a Jupyter kernel for the environment so that it can be found and picked up by Jupyter Lab instances:
+
 ```console
 conda install ipykernel
 python -m ipykernel install --user --name NSBI --display-name "NSBI"
@@ -35,7 +38,7 @@ The notebooks presented here aim to serve as a scaled-down and simplified tutori
 <br/>
 
 - An implementation of neural simulation-based inference for parameter estimation in ATLAS (https://arxiv.org/pdf/2412.01600)
-  
+
 <br/>
 
 - Measurement of off-shell Higgs boson production in the $H\to ZZ \to 4\ell$ decay channel using a neural simulation-based inference technique in 13 TeV p-p collisions with the ATLAS detector (https://arxiv.org/pdf/2412.01548)
