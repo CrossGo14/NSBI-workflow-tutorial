@@ -1,3 +1,7 @@
+# Application to CMS Open data - ttbar production
+
+-----
+
 This example needs the execution of notebooks in the following order, with intermediate data cached locally. 
 
 1. [`Data_Preprocessing.ipynb`](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/cms_ttbar_open_data/Data_Preprocessing.ipynb) - loads CMS open data using the `nanoaod_inputs.json` config file, and processes it into dataframe and numpy objects for subsequent likelihood ratio training step.
