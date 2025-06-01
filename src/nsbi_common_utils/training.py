@@ -71,7 +71,9 @@ class TrainEvaluatePreselNN:
 
         # Standardize the input features
         # self.scaler = StandardScaler()
-        self.scaler = ColumnTransformer([("scaler", MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
+        # self.scaler = ColumnTransformer([("scaler", MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
+        # self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.columns_scaling)],remainder='passthrough')
+        self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
         X_train = self.scaler.fit_transform(X_train)  # Fit & transform training data
         X_val = self.scaler.transform(X_val)
         
