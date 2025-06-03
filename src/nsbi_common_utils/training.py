@@ -273,17 +273,18 @@ class TrainEvaluate_NN:
                                                                             stratify=self.train_labels)
         
 
-        holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
+        train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+
 
         if self.calibration:
 
             self.calibration_switch = True
 
-            calibration_data_num = holdout_data_prediction[self.holdout_labels_eval==1]
-            calibration_data_den = holdout_data_prediction[self.holdout_labels_eval==0]
+            calibration_data_num = train_data_prediction[self.train_labels_eval==1]
+            calibration_data_den = train_data_prediction[self.train_labels_eval==0]
 
-            w_num = self.holdout_weights_eval[self.holdout_labels_eval==1]
-            w_den = self.holdout_weights_eval[self.holdout_labels_eval==0]
+            w_num = self.train_weights_eval[self.train_labels_eval==1]
+            w_den = self.train_weights_eval[self.train_labels_eval==0]
         
             self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
                                                              nbins=num_bins_cal, method='direct', mode='dynamic')
@@ -292,11 +293,13 @@ class TrainEvaluate_NN:
 
             pickle.dump(self.histogram_calibrator, file_calib)
 
-            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
             train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
 
         else:
-            train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
+
+
 
 
         self.label_0_hpred = holdout_data_prediction[label_holdout==0].copy()
@@ -449,12 +452,10 @@ class TrainEvaluate_NN:
 
 
     def evaluate_and_save_ratios(self, dataset):
-
-        channel_name = self.sample_name[0]
         
         score_pred = self.predict_with_model(dataset[self.columns], use_log_loss=self.use_log_loss)
 
-        ratio = score_pred/(1.0-score_pred)
+        ratio = score_pred / (1.0-score_pred)
 
         np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio)
 
