@@ -298,8 +298,7 @@ def plot_reweighted(dataset, score_den, weight_den, score_num, weight_num,
         plt.show()
         plt.clf()
 
-def plot_overfit(score_1, score_2, w_train, w_test, 
-                 calibration_frac = 0.3, nbins=50, 
+def plot_overfit(score_1, score_2, w_train, w_test, nbins=50, 
                  plotRange=[0.0,1.0], holdout_index=1, 
                  label='X', path_to_figures=""):
 
@@ -323,7 +322,6 @@ def plot_overfit(score_1, score_2, w_train, w_test,
     plt.ylabel("Normalized", fontsize=18)
     plt.legend(loc='upper right', fontsize=18)
     plt.axis(xmin=0.0, xmax=1.0)
-    # hep.atlas.text(loc=0, text='Internal')
 
     #Residual plot
     difference = score_1_h - score_2_h

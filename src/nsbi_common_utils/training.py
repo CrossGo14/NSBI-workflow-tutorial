@@ -72,8 +72,8 @@ class TrainEvaluatePreselNN:
         # Standardize the input features
         # self.scaler = StandardScaler()
         # self.scaler = ColumnTransformer([("scaler", MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
-        # self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.columns_scaling)],remainder='passthrough')
-        self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
+        self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.columns_scaling)],remainder='passthrough')
+        # self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
         X_train = self.scaler.fit_transform(X_train)  # Fit & transform training data
         X_val = self.scaler.transform(X_val)
         
@@ -87,7 +87,7 @@ class TrainEvaluatePreselNN:
 
         optimizer = tf.keras.optimizers.Nadam(learning_rate=0.1)
         # Compile the model
-        self.model.compile(optimizer='nadam',
+        self.model.compile(optimizer=optimizer,
                       loss='sparse_categorical_crossentropy',
                       weighted_metrics=["accuracy"])
         
@@ -180,7 +180,6 @@ class TrainEvaluate_NN:
 
         #HyperParameters for the NN training
         holdout_num   = math.floor(self.dataset.shape[0]*0.3)
-        train_num     = math.floor(self.dataset.shape[0]*0.7)
         validation_split = 0.1
 
         data_train, data_holdout, \
@@ -275,16 +274,6 @@ class TrainEvaluate_NN:
         
 
         holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
-
-        # if self.calibration:
-        #     self.iso_reg = IsotonicRegression(out_of_bounds='clip')
-        #     self.iso_reg.fit(holdout_data_prediction, self.holdout_labels_eval)
-        #     self.calibration_switch = True
-        #     holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
-        #     train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
-        # else:
-        #     train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
-
 
         if self.calibration:
 
@@ -394,12 +383,12 @@ class TrainEvaluate_NN:
         from nsbi_common_utils.plotting import plot_overfit
 
         plot_overfit(self.label_0_tpred, self.label_0_hpred, self.w_train_label_0, self.w_holdout_label_0, 
-                    calibration_frac = 0.3, nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
-                    label=f'{self.sample_name[0]}', path_to_figures=self.path_to_figures)
-        
-        plot_overfit(self.label_1_tpred, self.label_1_hpred, self.w_train_label_1, self.w_holdout_label_1,
-                    calibration_frac = 0.3, nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
+                    nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
                     label=f'{self.sample_name[1]}', path_to_figures=self.path_to_figures)
+        
+        plot_overfit(self.label_1_tpred, self.label_1_hpred, self.w_train_label_1, self.w_holdout_label_1, 
+                    nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
+                    label=f'{self.sample_name[0]}', path_to_figures=self.path_to_figures)
 
 
     def make_calib_plots(self, observable='score', nbins=10):
