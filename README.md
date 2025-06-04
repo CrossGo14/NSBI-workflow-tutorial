@@ -80,4 +80,4 @@ This work is being supported by the U.S. National Science Foundation (NSF) coope
 
 ## License
 
-`common-utils` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+`nsbi-common-utils` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
