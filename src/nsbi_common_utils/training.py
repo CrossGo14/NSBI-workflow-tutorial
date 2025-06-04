@@ -59,7 +59,7 @@ class TrainEvaluatePreselNN:
         self.num_classes = num_classes
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
-    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024, verbose=2):
+    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024, verbose=2, learning_rate=0.1):
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
@@ -85,15 +85,20 @@ class TrainEvaluatePreselNN:
             layers.Dense(self.num_classes, activation='softmax')  # Output layer for 5 classes
         ])
 
-        optimizer = tf.keras.optimizers.Nadam(learning_rate=0.1)
+        optimizer = tf.keras.optimizers.Nadam(learning_rate=learning_rate)
         # Compile the model
         self.model.compile(optimizer=optimizer,
                       loss='sparse_categorical_crossentropy',
                       weighted_metrics=["accuracy"])
         
+        callback_factor = 0.01
+        callback_patience = 30
+        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=callback_factor,
+                                        patience=callback_patience, min_lr=0.000000001)
+        
         # Train the model with sample weights
         self.model.fit(X_train, y_train, sample_weight=weight_train, 
-                  validation_data=(X_val, y_val, weight_val), epochs=epochs, batch_size=batch_size, verbose=verbose)
+                  validation_data=(X_val, y_val, weight_val), callbacks=[reduce_lr], epochs=epochs, batch_size=batch_size, verbose=verbose)
 
         if path_to_save!='':
 
@@ -196,7 +201,6 @@ class TrainEvaluate_NN:
                                         patience=callback_patience, min_lr=0.000000001)
 
         es = EarlyStopping(monitor='val_loss', mode='min', verbose=2, patience=300)
-
 
         if (scalerType == 'MinMax'):
             self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')

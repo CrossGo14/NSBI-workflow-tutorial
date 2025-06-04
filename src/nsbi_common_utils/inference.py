@@ -253,14 +253,14 @@ class nsbi_inference:
     def plot_NLL_scan(self, parameter_name, parameter_label='', bound_range=(0.0, 3.0), 
                       fit_strategy=2, isConstrainedNP=False, freeze_params=[], noConstrainedParams=False):
 
-        jitted_NLL = jax.jit(self.full_nll_function_noConst)
-        jitted_NLL_grad = jax.jit(jax.grad(self.full_nll_function_noConst))
-
         if not noConstrainedParams:
             m = Minuit(jax.jit(self.full_nll_function), self.asimov_param_vec, 
                         grad=jax.jit(jax.grad(self.full_nll_function)), name=tuple(self.list_params_all))
         else:
             print(f"no constrained params")
+            jitted_NLL = jax.jit(self.full_nll_function_noConst)
+            jitted_NLL_grad = jax.jit(jax.grad(self.full_nll_function_noConst))
+            
             m = Minuit(jitted_NLL, self.asimov_param_vec, 
                         grad=jitted_NLL_grad, name=tuple(self.list_params_all))
             
