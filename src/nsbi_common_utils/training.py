@@ -59,7 +59,7 @@ class TrainEvaluatePreselNN:
         self.num_classes = num_classes
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
-    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024, verbose=2):
+    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024, verbose=2, learning_rate=0.1):
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
@@ -71,7 +71,9 @@ class TrainEvaluatePreselNN:
 
         # Standardize the input features
         # self.scaler = StandardScaler()
-        self.scaler = ColumnTransformer([("scaler", MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
+        # self.scaler = ColumnTransformer([("scaler", MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
+        self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.columns_scaling)],remainder='passthrough')
+        # self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
         X_train = self.scaler.fit_transform(X_train)  # Fit & transform training data
         X_val = self.scaler.transform(X_val)
         
@@ -83,15 +85,20 @@ class TrainEvaluatePreselNN:
             layers.Dense(self.num_classes, activation='softmax')  # Output layer for 5 classes
         ])
 
-        optimizer = tf.keras.optimizers.Nadam(learning_rate=0.1)
+        optimizer = tf.keras.optimizers.Nadam(learning_rate=learning_rate)
         # Compile the model
-        self.model.compile(optimizer='nadam',
+        self.model.compile(optimizer=optimizer,
                       loss='sparse_categorical_crossentropy',
                       weighted_metrics=["accuracy"])
         
+        callback_factor = 0.01
+        callback_patience = 30
+        reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=callback_factor,
+                                        patience=callback_patience, min_lr=0.000000001)
+        
         # Train the model with sample weights
         self.model.fit(X_train, y_train, sample_weight=weight_train, 
-                  validation_data=(X_val, y_val, weight_val), epochs=epochs, batch_size=batch_size, verbose=verbose)
+                  validation_data=(X_val, y_val, weight_val), callbacks=[reduce_lr], epochs=epochs, batch_size=batch_size, verbose=verbose)
 
         if path_to_save!='':
 
@@ -178,7 +185,6 @@ class TrainEvaluate_NN:
 
         #HyperParameters for the NN training
         holdout_num   = math.floor(self.dataset.shape[0]*0.3)
-        train_num     = math.floor(self.dataset.shape[0]*0.7)
         validation_split = 0.1
 
         data_train, data_holdout, \
@@ -195,7 +201,6 @@ class TrainEvaluate_NN:
                                         patience=callback_patience, min_lr=0.000000001)
 
         es = EarlyStopping(monitor='val_loss', mode='min', verbose=2, patience=300)
-
 
         if (scalerType == 'MinMax'):
             self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
@@ -272,27 +277,18 @@ class TrainEvaluate_NN:
                                                                             stratify=self.train_labels)
         
 
-        holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
-
-        # if self.calibration:
-        #     self.iso_reg = IsotonicRegression(out_of_bounds='clip')
-        #     self.iso_reg.fit(holdout_data_prediction, self.holdout_labels_eval)
-        #     self.calibration_switch = True
-        #     holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
-        #     train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
-        # else:
-        #     train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+        train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
 
 
         if self.calibration:
 
             self.calibration_switch = True
 
-            calibration_data_num = holdout_data_prediction[self.holdout_labels_eval==1]
-            calibration_data_den = holdout_data_prediction[self.holdout_labels_eval==0]
+            calibration_data_num = train_data_prediction[self.train_labels_eval==1]
+            calibration_data_den = train_data_prediction[self.train_labels_eval==0]
 
-            w_num = self.holdout_weights_eval[self.holdout_labels_eval==1]
-            w_den = self.holdout_weights_eval[self.holdout_labels_eval==0]
+            w_num = self.train_weights_eval[self.train_labels_eval==1]
+            w_den = self.train_weights_eval[self.train_labels_eval==0]
         
             self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
                                                              nbins=num_bins_cal, method='direct', mode='dynamic')
@@ -301,11 +297,13 @@ class TrainEvaluate_NN:
 
             pickle.dump(self.histogram_calibrator, file_calib)
 
-            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
             train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
 
         else:
-            train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
+
+
 
 
         self.label_0_hpred = holdout_data_prediction[label_holdout==0].copy()
@@ -392,12 +390,12 @@ class TrainEvaluate_NN:
         from nsbi_common_utils.plotting import plot_overfit
 
         plot_overfit(self.label_0_tpred, self.label_0_hpred, self.w_train_label_0, self.w_holdout_label_0, 
-                    calibration_frac = 0.3, nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
-                    label=f'{self.sample_name[0]}', path_to_figures=self.path_to_figures)
-        
-        plot_overfit(self.label_1_tpred, self.label_1_hpred, self.w_train_label_1, self.w_holdout_label_1,
-                    calibration_frac = 0.3, nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
+                    nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
                     label=f'{self.sample_name[1]}', path_to_figures=self.path_to_figures)
+        
+        plot_overfit(self.label_1_tpred, self.label_1_hpred, self.w_train_label_1, self.w_holdout_label_1, 
+                    nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
+                    label=f'{self.sample_name[0]}', path_to_figures=self.path_to_figures)
 
 
     def make_calib_plots(self, observable='score', nbins=10):
@@ -458,12 +456,10 @@ class TrainEvaluate_NN:
 
 
     def evaluate_and_save_ratios(self, dataset):
-
-        channel_name = self.sample_name[0]
         
         score_pred = self.predict_with_model(dataset[self.columns], use_log_loss=self.use_log_loss)
 
-        ratio = score_pred/(1.0-score_pred)
+        ratio = score_pred / (1.0-score_pred)
 
         np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio)
 

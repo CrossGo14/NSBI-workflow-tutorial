@@ -36,6 +36,8 @@ class nsbi_inference:
         self.list_params_all                = list_params_all
         self.ratio_variations               = ratio_variations
 
+        print(self.process_index['htautau'])
+
     # poynomial interpolation, same as HistFactory
     def poly_interp(self, tuple_input):
         
@@ -169,10 +171,6 @@ class nsbi_inference:
                                                                                 self.ratio_variations[channel][process]['up'],
                                                                                 self.ratio_variations[channel][process]['down'])
 
-            # jax.debug.print("variation array after looped systematics = {x1}", x1=self.hist_vars[channel]["ttbar"])
-            # jax.debug.print("variation ratio array after looped systematics = {x1}", x1=self.ratio_vars[channel]['ttbar'])
-            # jax.debug.print("variation ratio array after looped systematics = {x1}", x1=self.ratio_vars[channel]['wjets'])
-
             nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
@@ -190,14 +188,60 @@ class nsbi_inference:
         llr_tot += jnp.sum(param_vec[self.num_unconstrained_params:]**2)
 
         return llr_tot
+    
+    # compute the full summed log-likelihood
+    def full_nll_function_noConst(self, param_vec):
+
+        llr_tot = 0.0
+
+        self.hist_vars = {}
+        for channel in self.channels_binned:        
+
+            self.hist_vars[channel] = {key: jnp.ones_like(value) for key, value in self.hist_channels[channel].items()}
+
+            nu_hist_channel = self.calculate_parameterized_yields(param_vec, 
+                                                                  self.hist_channels[channel], 
+                                                                  self.hist_vars[channel])
+
+            data_hist_channel = self.data_hist_channel[channel]
+
+            llr_tot += self.pois_loglikelihood(data_hist_channel, nu_hist_channel)
+
+        self.ratio_vars = {}
+        for channel in self.channels_unbinned:
+
+            self.hist_vars[channel] = {key: jnp.ones_like(value) for key, value in self.hist_channels[channel].items()}
+            
+            nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
+                                                                  self.hist_channels[channel], 
+                                                                  self.hist_vars[channel])
+
+            data_hist_channel = self.data_hist_channel[channel]
+
+            llr_tot += self.pois_loglikelihood(data_hist_channel, nu_tot_unbinned)
+
+            self.ratio_vars[channel] = {key: jnp.ones_like(value) for key, value in self.ratios[channel].items()}
+
+            llr_pe = self.calculate_parameterized_ratios(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
+                                                        self.ratios[channel], self.ratio_vars[channel]) \
+                    - jnp.log(nu_tot_unbinned)
+
+            llr_tot += jnp.sum(jnp.multiply(self.weights, -2 * llr_pe))
+
+        return llr_tot
 
 
-    def perform_fit(self, fit_strategy=2, freeze_params=[]):
+    def perform_fit(self, fit_strategy=2, freeze_params=[], noConstrainedParams=False):
 
-        m = Minuit(jax.jit(self.full_nll_function), self.asimov_param_vec, 
-                    grad=jax.jit(jax.grad(self.full_nll_function)), name=tuple(self.list_params_all))
+        if not noConstrainedParams:
+            m = Minuit(jax.jit(self.full_nll_function), self.asimov_param_vec, 
+                        grad=jax.jit(jax.grad(self.full_nll_function)), name=tuple(self.list_params_all))
+        else:
+            print(f"no constrained params")
+            m = Minuit(jax.jit(self.full_nll_function_noConst), self.asimov_param_vec, 
+                        grad=jax.jit(jax.grad(self.full_nll_function_noConst)), name=tuple(self.list_params_all))
         m.errordef = Minuit.LEAST_SQUARES
-        strategy = 2
+        strategy = fit_strategy
         if len(freeze_params)>=1:
             for param in freeze_params:
                 m.fixed[param] = True
@@ -207,13 +251,21 @@ class nsbi_inference:
 
 
     def plot_NLL_scan(self, parameter_name, parameter_label='', bound_range=(0.0, 3.0), 
-                      fit_strategy=2, isConstrainedNP=False, freeze_params=[]):
+                      fit_strategy=2, isConstrainedNP=False, freeze_params=[], noConstrainedParams=False):
 
-        m = Minuit(jax.jit(self.full_nll_function), self.asimov_param_vec, 
-                    grad=jax.jit(jax.grad(self.full_nll_function)), name=tuple(self.list_params_all))
+        if not noConstrainedParams:
+            m = Minuit(jax.jit(self.full_nll_function), self.asimov_param_vec, 
+                        grad=jax.jit(jax.grad(self.full_nll_function)), name=tuple(self.list_params_all))
+        else:
+            print(f"no constrained params")
+            jitted_NLL = jax.jit(self.full_nll_function_noConst)
+            jitted_NLL_grad = jax.jit(jax.grad(self.full_nll_function_noConst))
+            
+            m = Minuit(jitted_NLL, self.asimov_param_vec, 
+                        grad=jitted_NLL_grad, name=tuple(self.list_params_all))
+            
         m.errordef = Minuit.LEAST_SQUARES
-        strategy = 2
-        m.strategy = strategy
+        m.strategy = fit_strategy
         if len(freeze_params)>=1:
             for param in freeze_params:
                 m.fixed[param] = True
