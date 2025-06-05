@@ -335,10 +335,3 @@ def plot_overfit(score_1, score_2, w_train, w_test, nbins=50,
     plt.savefig(f'{path_to_figures}/overfit_'+str(holdout_index)+'_'+str(label)+'.png', bbox_inches='tight')
     plt.show()
     plt.clf()
-
-
-
-
-
-
-
