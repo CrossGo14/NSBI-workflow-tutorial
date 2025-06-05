@@ -55,7 +55,7 @@ The aim is to demonstrate the workflow associated with a full-scale LHC analysis
 
 **Note: The tutorial is a scaled down version of the original workflow.**
 
-The workflow currently uses the ttbar open data released by CMS, more open datasets will be added in the future. A more complete version with systematic uncertainties and ensemble training will also be added.
+The workflow currently uses the ttbar open data released by CMS, and the Higgs to tau tau dataset from FAIR universe challenge. More open datasets will be added in the future. 
 
 ## Library
 
@@ -80,4 +80,4 @@ This work is being supported by the U.S. National Science Foundation (NSF) coope
 
 ## License
 
-`common-utils` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+`nsbi-common-utils` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
