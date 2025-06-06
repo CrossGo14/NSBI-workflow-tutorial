@@ -20,9 +20,12 @@ signal_processes : ["htautau"]
 background_processes : ["ttbar", "ztautau"]
 # background_processes = ["ttbar", "ztautau", "diboson"]
 
+# choice of reference hypothesis
+ref_processes : ["htautau"]
+
 # mix_model_hypotheses = signal_processes + background_processes
-mix_model_hypotheses : background_processes
-ref_processes : signal_processes
+mix_model_hypotheses : ["ttbar", "ztautau"]
+
 
 # Assign an integer with each of the processes 
 labels_dict:
