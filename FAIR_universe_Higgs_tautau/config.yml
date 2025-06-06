@@ -37,3 +37,22 @@ pre_factor_preselection_score:
   ztautau: 1.0
   ttbar: 1.0
 
+# Systematics to use for the analysis model
+dict_systs:
+  TES:
+    process:
+      - htautau
+      - ttbar
+      - ztautau
+    directions:
+      - up
+      - dn
+
+  JES:
+    process:
+      - htautau
+      - ttbar
+      - ztautau
+    directions:
+      - up
+      - dn
