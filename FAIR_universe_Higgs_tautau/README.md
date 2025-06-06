@@ -1,4 +1,4 @@
 FAIR Universe challenge
 ===
 
-![Screenshot 2025-06-06 at 10.51.33 AM.png](attachment:af874f0b-6437-4ed9-9351-d22d361ddda6.png)
+![Screenshot 2025-06-06 at 11 22 19 AM](https://github.com/user-attachments/assets/3107e69c-7071-4dcd-bb3d-01777ba93746)
