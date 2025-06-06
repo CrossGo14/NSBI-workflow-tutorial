@@ -1,0 +1,34 @@
+# Features to use for training NNs
+columns : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi']
+# columns = ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi', 'PRI_jet_all_pt', 'PRI_n_jets', 'has_jets']
+# columns = ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi', 'PRI_jet_all_pt', 'PRI_jet_leading_pt', 'PRI_jet_leading_eta', 'has_jets']
+
+# Features to standardize before training
+columns_scaling : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi']
+# columns_scaling = ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi', 'PRI_jet_all_pt']
+# columns_scaling = ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi', 'PRI_jet_all_pt', 'PRI_jet_leading_pt', 'PRI_jet_leading_eta']
+
+# Signal processes in the model
+signal_processes : ["htautau"]
+
+# Background processes in the model
+background_processes : ["ttbar", "ztautau"]
+# background_processes = ["ttbar", "ztautau", "diboson"]
+
+# mix_model_hypotheses = signal_processes + background_processes
+mix_model_hypotheses : background_processes
+ref_processes : signal_processes
+
+# Assign an integer with each of the processes 
+labels_dict:
+  htautau: 0
+  ztautau: 1
+  ttbar: 2
+  # diboson: 3 # exclude low stats diboson sample for now
+
+# float factors multiplying the probabilities in the preselection score observable 
+pre_factor_preselection_score:
+  htautau: 1.0
+  ztautau: 1.0
+  ttbar: 1.0
+
