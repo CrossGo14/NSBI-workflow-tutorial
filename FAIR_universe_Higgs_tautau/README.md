@@ -3,7 +3,7 @@ FAIR Universe challenge
 
 The objective of FAIR Universe is to build an open, large-compute-scale AI ecosystem for sharing datasets, training & fine-tuning large models, and benchmarks in HEP (particle physics and cosmology). 
 
-They recently hosted a challenge focusing on measuring and minimizing the effects of systematic uncertainties in HEP.
+They host challenges focusing on measuring and minimizing the effects of systematic uncertainties in HEP.
 
 Dataset
 --
