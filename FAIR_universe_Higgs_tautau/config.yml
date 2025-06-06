@@ -37,6 +37,27 @@ pre_factor_preselection_score:
   ztautau: 1.0
   ttbar: 1.0
 
+# Number of unconstrained floating parameters in the inference model
+num_unconstrained_params : 3
+
+list_unconstrained_params : ['mu_higgs', 'mu_ttbar', 'mu_z']
+floating_processes    : ['htautau', 'ttbar', 'ztautau']
+fixed_processes       : []
+
+# labels for the various binned and unbinned channels
+channels_binned : ['CR']
+channels_unbinned : ['SR']
+
+# Mapping process to index of the floating parameters
+process_index : 
+    htautau: 
+        - 0
+    ttbar:
+        - 1
+    ztautau: 
+        - 2
+
+
 # Systematics to use for the analysis model
 dict_systs:
   TES:
