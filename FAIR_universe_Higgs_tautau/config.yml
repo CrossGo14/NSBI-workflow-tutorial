@@ -1,12 +1,17 @@
+# Base path to save/load data from
+path_prefix : '/home/jaySandesara/NSBI_workflow_tutorial/FAIR_universe_Higgs_tautau/'
+
+# Cache name
+path_saved_data: 'cached_data/'
+
+# Directory where pre-selection model is saved
+path_preselection_NN_model: 'preselection_saved_NN/'
+
 # Features to use for training NNs
 columns : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi']
-# columns = ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi', 'PRI_jet_all_pt', 'PRI_n_jets', 'has_jets']
-# columns = ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi', 'PRI_jet_all_pt', 'PRI_jet_leading_pt', 'PRI_jet_leading_eta', 'has_jets']
 
 # Features to standardize before training
 columns_scaling : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi']
-# columns_scaling = ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi', 'PRI_jet_all_pt']
-# columns_scaling = ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_met', 'PRI_met_phi', 'PRI_had_pt', 'PRI_had_eta', 'PRI_had_phi', 'PRI_jet_all_pt', 'PRI_jet_leading_pt', 'PRI_jet_leading_eta']
 
 # Signal processes in the model
 signal_processes : ["htautau"]
