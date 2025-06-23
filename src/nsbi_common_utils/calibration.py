@@ -51,7 +51,7 @@ class HistogramCalibrator:
             edges = np.linspace(hmin, hmax, nbins + 1)
         elif mode == "dynamic":
             #percentages = 100.0 * np.linspace(0.0, 1.0, nbins+1)
-            edges = self.weighted_quantile(data, np.linspace(0.0, 1.0, nbins+1))
+            edges = self.weighted_quantile(data, np.linspace(hmin, hmax, nbins+1))
         elif mode == "dynamic_unweighted":
             percentages = 100.0 * np.linspace(0.0, 1.0, nbins+1)
             edges = np.percentile(data, percentages)

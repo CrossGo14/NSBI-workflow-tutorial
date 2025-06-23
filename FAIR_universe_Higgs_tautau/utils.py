@@ -18,39 +18,33 @@ def calculate_preselection_observable(pred_NN_incl, labels_dict, signal_processe
     return presel_score
 
 
-def preselection_using_score(dataset, preselection_cuts):
+def preselection_using_score(dataset, channel_selections):
 
-    lower_cut = preselection_cuts.get('lower')
-    upper_cut = preselection_cuts.get('upper')
-    
-    masks = {
-        'SR': pd.Series(True, index=dataset.index),
-        'CR': pd.Series(False, index=dataset.index)
-    }
-    
-    # CASE A: both lower and upper exist (and are “active”, i.e. not -999)
-    if (lower_cut != -999) and (upper_cut != -999):
-        masks['SR'] = (
-            (dataset.presel_score >= lower_cut) &
-            (dataset.presel_score <= upper_cut)
-        )
-        masks['CR'] = ~masks['SR']  
-    
-    # CASE B: only a lower‐side cut is active
-    elif (lower_cut != -999):
-        masks['SR'] = (dataset.presel_score >= lower_cut)
-        masks['CR'] = (dataset.presel_score <  lower_cut)
-    
-    # CASE C: only an upper‐side cut is active
-    elif (upper_cut != -999):
-        masks['SR'] = (dataset.presel_score <= upper_cut)
-        masks['CR'] = (dataset.presel_score >  upper_cut)
-    
-    
-    dataset_SR   = dataset[masks['SR']].copy()
-    dataset_CR = dataset[masks['CR']].copy()
+    mask_channel = {}
+    dataset_channel = {}
 
-    return dataset_SR, dataset_CR
+    for channel, selection_dict in channel_selections.items():
+
+        lower_cut = selection_dict.get('lower_presel')
+        upper_cut = selection_dict.get('upper_presel')
+
+        if (lower_cut != -999) and (upper_cut != -999):
+    
+            mask_channel = (
+                (dataset.presel_score >= lower_cut) &
+                (dataset.presel_score <= upper_cut)
+            )
+    
+        elif (lower_cut != -999):
+            mask_channel = (dataset.presel_score >= lower_cut)
+    
+        elif (upper_cut != -999):
+            mask_channel = (dataset.presel_score <= upper_cut)
+    
+    
+        dataset_channel[channel]   = dataset[mask_channel].copy()
+
+    return dataset_channel
 
 
 def plot_kinematic_features(

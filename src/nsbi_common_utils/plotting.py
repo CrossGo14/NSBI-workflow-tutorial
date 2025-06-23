@@ -5,6 +5,7 @@ from numpy import asarray
 from numpy import savetxt
 from numpy import loadtxt
 import mplhep as hep
+import math
 from scipy import stats
 
 hep.set_style("ATLAS")
@@ -335,3 +336,74 @@ def plot_overfit(score_1, score_2, w_train, w_test, nbins=50,
     plt.savefig(f'{path_to_figures}/overfit_'+str(holdout_index)+'_'+str(label)+'.png', bbox_inches='tight')
     plt.show()
     plt.clf()
+
+
+def plot_all_features(dataframe, weight_array, label_array, nbins=20):
+    # get list of feature names
+    features = list(dataframe.columns)
+    n_features = len(features)
+
+    # define grid: 2 rows × ceil(n_features/2) columns
+    n_rows = 2
+    n_cols = math.ceil(n_features / n_rows)
+
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             figsize=(4 * n_cols, 3 * n_rows),
+                             squeeze=False)
+
+    # flatten axes array for easy indexing
+    axes_flat = axes.flatten()
+
+    for i, feature in enumerate(features):
+        ax = axes_flat[i]
+        kin_feature = dataframe[feature].to_numpy()
+
+        # compute bins
+        min_val = np.amin(kin_feature)
+        max_val = np.amax(kin_feature)
+        bins = np.linspace(min_val, max_val, nbins)
+
+        kin_feature_label_0 = kin_feature[label_array==0]
+        kin_feature_label_1 = kin_feature[label_array==1]
+
+        hist_kin_feature_label_0 = np.histogram(kin_feature_label_0, 
+                                                        weights=weight_array[label_array==0],
+                                                        bins = bins)[0]
+
+        hist_kin_feature_label_0_err = np.sqrt(np.histogram(kin_feature_label_0, 
+                                                        weights=weight_array[label_array==0]**2,
+                                                        bins = bins)[0])
+        
+        hist_kin_feature_label_1 = np.histogram(kin_feature_label_1, 
+                                                        weights=weight_array[label_array==1],
+                                                        bins = bins)[0]
+
+        hist_kin_feature_label_1_err = np.sqrt(np.histogram(kin_feature_label_1, 
+                                                        weights=weight_array[label_array==1]**2,
+                                                        bins = bins)[0])
+
+        # plot weighted histogram on this axis
+        hep.histplot(hist_kin_feature_label_0,
+                     yerr = hist_kin_feature_label_0_err,
+                     bins=bins,
+                     ax=ax,
+                     label = 'class label 0')
+        
+        hep.histplot(hist_kin_feature_label_1,
+                     yerr = hist_kin_feature_label_1_err,
+                     bins=bins,
+                     ax=ax,
+                     label = 'class label 1')
+
+        ax.set_xlabel(feature)
+        plt.ylabel('Density')
+        ax.set_yscale('log')
+        ax.grid(True, which="both", ls=":", lw=0.5)
+
+    # turn off any unused subplots
+    for j in range(n_features, n_rows * n_cols):
+        axes_flat[j].axis('off')
+
+    plt.tight_layout()
+    plt.show()
+        

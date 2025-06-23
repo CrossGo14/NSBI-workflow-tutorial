@@ -40,8 +40,11 @@ from sklearn.metrics import roc_curve, roc_auc_score
 import pickle 
 
 import nsbi_common_utils.plotting
-from nsbi_common_utils.plotting import plot_calibration_curve, plot_reweighted, plot_loss, fill_histograms_wError
+from nsbi_common_utils.plotting import plot_loss, plot_all_features
 from nsbi_common_utils.calibration import HistogramCalibrator
+
+importlib.reload(sys.modules['nsbi_common_utils.plotting'])
+from nsbi_common_utils.plotting import plot_all_features
 
 from sklearn.utils import class_weight
 from joblib import dump, load
@@ -99,7 +102,7 @@ class TrainEvaluatePreselNN:
         # Train the model with sample weights
         self.model.fit(X_train, y_train, sample_weight=weight_train, 
                   validation_data=(X_val, y_val, weight_val), callbacks=[reduce_lr], epochs=epochs, batch_size=batch_size, verbose=verbose)
-
+        K.clear_session()
         if path_to_save!='':
 
             if not os.path.exists(path_to_save):
@@ -136,7 +139,9 @@ class TrainEvaluatePreselNN:
     def predict(self, dataset):
 
         features_scaled = self.scaler.transform(dataset[self.columns])
-        pred_NN = self.model.predict(features_scaled)
+        pred_NN = self.model.predict(features_scaled, batch_size=10000)
+        K.clear_session()
+        
         return pred_NN
 
         
@@ -178,14 +183,15 @@ class TrainEvaluate_NN:
              learning_rate, scalerType, calibration=False, 
              num_bins_cal = 40, callback = True, 
              callback_patience=30, callback_factor=0.01,
-             activation='swish', verbose=2, ensemble_index=''):
+             activation='swish', verbose=2, ensemble_index='', 
+             validation_split=0.1, holdout_split=0.3, plot_scaled_features=False):
 
-        self.calibration = calibration # Calibration capabilities coming soon
+        self.calibration = calibration
         self.batch_size = batch_size
 
         #HyperParameters for the NN training
-        holdout_num   = math.floor(self.dataset.shape[0]*0.3)
-        validation_split = 0.1
+        holdout_num   = math.floor(self.dataset.shape[0]*holdout_split)
+        validation_split = validation_split
 
         data_train, data_holdout, \
         label_train, label_holdout, \
@@ -204,18 +210,19 @@ class TrainEvaluate_NN:
 
         if (scalerType == 'MinMax'):
             self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
+            
         if (scalerType == 'StandardScaler'):
             self.scaler = ColumnTransformer([("scaler",StandardScaler(), self.columns_scaling)],remainder='passthrough')
+            
         if (scalerType == 'PowerTransform_Yeo'):
             self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
-        if (scalerType == 'RobustScaler'):
-            self.scaler = ColumnTransformer([("scaler",RobustScaler(unit_variance=True), self.columns_scaling)],remainder='passthrough')
-        if (scalerType == 'QuantileTransformer'):
-            self.scaler = ColumnTransformer([("scaler",QuantileTransformer(output_distribution='normal'), self.columns_scaling)],remainder='passthrough')
 
 
         scaled_data_train = self.scaler.fit_transform(data_train)
         scaled_data_train= pd.DataFrame(scaled_data_train, columns=self.columns)
+
+        if plot_scaled_features:
+            plot_all_features(scaled_data_train, weight_train, label_train)
 
         scaled_data_holdout = self.scaler.transform(data_holdout)
         scaled_data_holdout = pd.DataFrame(scaled_data_holdout, columns=self.columns)
@@ -225,6 +232,13 @@ class TrainEvaluate_NN:
         print(f"Sum of weights of class 1: {np.sum(weight_train[label_train==1])}")
 
         print(f"Using {activation} activation function")
+
+        # # Create a MirroredStrategy.
+        # strategy = tf.distribute.MirroredStrategy()
+        # print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+
+        # # Open a strategy scope.
+        # with strategy.scope():
 
         self.model_NN = build_model(n_hidden=hidden_layers, n_neurons=neurons, 
                                     learning_rate=learning_rate, 
@@ -251,7 +265,8 @@ class TrainEvaluate_NN:
                                                 validation_split=validation_split, sample_weight=weight_train, 
                                                 verbose=verbose)
         
-
+        K.clear_session()
+        
         print("Finished Training")
 
         saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
@@ -304,8 +319,6 @@ class TrainEvaluate_NN:
             holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
 
 
-
-
         self.label_0_hpred = holdout_data_prediction[label_holdout==0].copy()
         self.label_1_hpred = holdout_data_prediction[label_holdout==1].copy()
 
@@ -318,8 +331,6 @@ class TrainEvaluate_NN:
         
         self.w_train_label_0 = weight_train[label_train==0].copy()
         self.w_train_label_1 = weight_train[label_train==1].copy()
-
-        
 
         
         # Some diagnostics to ensure numerical stability - min/max must not be exactly 0 or 1
@@ -365,7 +376,7 @@ class TrainEvaluate_NN:
     def predict_with_model(self, data, use_log_loss=False):
 
         scaled_data = self.scaler.transform(data)
-        pred = self.model_NN.predict(scaled_data, verbose=2)
+        pred = self.model_NN.predict(scaled_data, verbose=2, batch_size=10000)
         pred = pred.reshape(pred.shape[0],)
 
         if use_log_loss:
@@ -380,7 +391,10 @@ class TrainEvaluate_NN:
 
             pred = self.histogram_calibrator.cali_pred(pred)
             pred = pred.reshape(pred.shape[0],)
+            pred = np.clip(pred, 1e-25, 0.999999)
 
+        K.clear_session()
+            
         return pred
         
 
@@ -413,7 +427,7 @@ class TrainEvaluate_NN:
                                    label="Calibration Curve - "+str(self.sample_name[0]))
 
         # Plot Calibration curves - nll function
-        if observable=='llr':
+        elif observable=='llr':
         
             plot_calibration_curve_ratio(self.label_0_tpred, self.w_train_label_0, 
                                          self.label_1_tpred, self.w_train_label_1, 
@@ -514,14 +528,11 @@ def build_model(n_hidden=4, n_neurons=1000, learning_rate=0.1,
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate) 
 
     if use_log_loss:
-        model.compile(loss=CARL_mod, optimizer=optimizer, weighted_metrics=['binary_accuracy'])
+        model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True), optimizer=optimizer, weighted_metrics=['binary_accuracy'])
     else:
         model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer=optimizer, weighted_metrics=['binary_accuracy'])
     return model
 
-#The modified CARL loss that directly regresses to LLR
-def CARL_mod(s_truth, s_predicted): 
+def convert_to_score(logLR):
 
-    loss = (s_truth)*tf.exp(-0.5*s_predicted)+(1.0-s_truth)*tf.exp(0.5*s_predicted)
-    return loss
-
+    return 1.0/(1.0+np.exp(-logLR))

@@ -105,7 +105,8 @@ class nsbi_inference:
         for process in self.floating_processes:
 
             # This will not work in the general case where model is non-linear in POI, needs modifications (TO-DO)
-            nu_tot += param_vec[self.process_index[process]] * hist_yields[process] * hist_vars[process]
+            param_index = tuple(self.process_index[process])
+            nu_tot += param_vec[param_index] * hist_yields[process] * hist_vars[process]
 
         for process in self.fixed_processes:
             nu_tot += hist_yields[process] * hist_vars[process]
@@ -118,7 +119,8 @@ class nsbi_inference:
         dnu_dx = jnp.zeros_like(self.weights)
 
         for process in self.floating_processes:
-            dnu_dx += param_vec[self.process_index[process]] * nu_vars[process] * nu_nominal[process] * ratios[process] * ratio_vars[process]
+            param_index = tuple(self.process_index[process])
+            dnu_dx += param_vec[param_index] * nu_vars[process] * nu_nominal[process] * ratios[process] * ratio_vars[process]
 
         for process in self.fixed_processes:
             dnu_dx += nu_vars[process] * nu_nominal[process] * ratios[process] * ratio_vars[process]
