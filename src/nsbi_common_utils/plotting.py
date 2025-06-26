@@ -339,6 +339,7 @@ def plot_overfit(score_1, score_2, w_train, w_test, nbins=50,
 
 
 def plot_all_features(dataframe, weight_array, label_array, nbins=20):
+    
     # get list of feature names
     features = list(dataframe.columns)
     n_features = len(features)
@@ -387,17 +388,18 @@ def plot_all_features(dataframe, weight_array, label_array, nbins=20):
                      yerr = hist_kin_feature_label_0_err,
                      bins=bins,
                      ax=ax,
-                     label = 'class label 0')
+                     label = 'class 0')
         
         hep.histplot(hist_kin_feature_label_1,
                      yerr = hist_kin_feature_label_1_err,
                      bins=bins,
                      ax=ax,
-                     label = 'class label 1')
+                     label = 'class 1')
 
         ax.set_xlabel(feature)
         plt.ylabel('Density')
         ax.set_yscale('log')
+        ax.legend()
         ax.grid(True, which="both", ls=":", lw=0.5)
 
     # turn off any unused subplots

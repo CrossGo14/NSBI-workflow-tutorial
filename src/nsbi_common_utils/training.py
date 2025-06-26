@@ -73,10 +73,7 @@ class TrainEvaluatePreselNN:
                                                                                     stratify=self.dataset['train_labels'])
 
         # Standardize the input features
-        # self.scaler = StandardScaler()
-        # self.scaler = ColumnTransformer([("scaler", MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
         self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.columns_scaling)],remainder='passthrough')
-        # self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
         X_train = self.scaler.fit_transform(X_train)  # Fit & transform training data
         X_val = self.scaler.transform(X_val)
         
@@ -184,14 +181,21 @@ class TrainEvaluate_NN:
              num_bins_cal = 40, callback = True, 
              callback_patience=30, callback_factor=0.01,
              activation='swish', verbose=2, ensemble_index='', 
-             validation_split=0.1, holdout_split=0.3, plot_scaled_features=False):
+             validation_split=0.1, holdout_split=0.3, plot_scaled_features=False, load_trained_models = False):
+
+
 
         self.calibration = calibration
-        self.batch_size = batch_size
+        
+        if load_trained_models: 
+            holdout_num, self.random_state_holdout = np.load(f"{self.path_to_models}num_events_random_state_train_holdout_split.npy")
+        else:
+            holdout_num   = math.floor(self.dataset.shape[0]*holdout_split)
 
-        #HyperParameters for the NN training
-        holdout_num   = math.floor(self.dataset.shape[0]*holdout_split)
+        
+        # HyperParameters for the NN training
         validation_split = validation_split
+        self.batch_size = batch_size
 
         data_train, data_holdout, \
         label_train, label_holdout, \
@@ -208,14 +212,20 @@ class TrainEvaluate_NN:
 
         es = EarlyStopping(monitor='val_loss', mode='min', verbose=2, patience=300)
 
-        if (scalerType == 'MinMax'):
-            self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
-            
-        if (scalerType == 'StandardScaler'):
-            self.scaler = ColumnTransformer([("scaler",StandardScaler(), self.columns_scaling)],remainder='passthrough')
-            
-        if (scalerType == 'PowerTransform_Yeo'):
-            self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
+        if load_trained_models:
+
+            self.scaler, self.model_NN = self.get_trained_model(self.path_to_models)
+
+        else:
+
+            if (scalerType == 'MinMax'):
+                self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
+                
+            if (scalerType == 'StandardScaler'):
+                self.scaler = ColumnTransformer([("scaler",StandardScaler(), self.columns_scaling)],remainder='passthrough')
+                
+            if (scalerType == 'PowerTransform_Yeo'):
+                self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
 
 
         scaled_data_train = self.scaler.fit_transform(data_train)
@@ -227,61 +237,62 @@ class TrainEvaluate_NN:
         scaled_data_holdout = self.scaler.transform(data_holdout)
         scaled_data_holdout = pd.DataFrame(scaled_data_holdout, columns=self.columns)
 
-        # Check if the datasets are normalized
-        print(f"Sum of weights of class 0: {np.sum(weight_train[label_train==0])}")
-        print(f"Sum of weights of class 1: {np.sum(weight_train[label_train==1])}")
+        if not load_trained_models:
 
-        print(f"Using {activation} activation function")
-
-        # # Create a MirroredStrategy.
-        # strategy = tf.distribute.MirroredStrategy()
-        # print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-
-        # # Open a strategy scope.
-        # with strategy.scope():
-
-        self.model_NN = build_model(n_hidden=hidden_layers, n_neurons=neurons, 
-                                    learning_rate=learning_rate, 
-                                    input_shape=[len(self.columns)], 
-                                    use_log_loss=self.use_log_loss,
-                                    activation=activation)
-
-        self.model_NN.summary()
-
-        if callback:
-
-            print("Using Callbacks")
-
-            self.history = self.model_NN.fit(scaled_data_train, label_train, callbacks=[reduce_lr, es], 
-                                                epochs=number_of_epochs, batch_size=batch_size, 
-                                                validation_split=validation_split, sample_weight=weight_train, 
-                                                verbose=verbose)
-
-        else:
-            print("Not Using Callbacks")
-
-            self.history = self.model_NN.fit(scaled_data_train, label_train, 
-                                                epochs=number_of_epochs, batch_size=batch_size, 
-                                                validation_split=validation_split, sample_weight=weight_train, 
-                                                verbose=verbose)
+            # Check if the datasets are normalized
+            print(f"Sum of weights of class 0: {np.sum(weight_train[label_train==0])}")
+            print(f"Sum of weights of class 1: {np.sum(weight_train[label_train==1])}")
+    
+            print(f"Using {activation} activation function")
+    
+            self.model_NN = build_model(n_hidden=hidden_layers, n_neurons=neurons, 
+                                        learning_rate=learning_rate, 
+                                        input_shape=[len(self.columns)], 
+                                        use_log_loss=self.use_log_loss,
+                                        activation=activation)
+    
+            self.model_NN.summary()
+    
+            if callback:
+    
+                print("Using Callbacks")
+    
+                self.history = self.model_NN.fit(scaled_data_train, label_train, callbacks=[reduce_lr, es], 
+                                                    epochs=number_of_epochs, batch_size=batch_size, 
+                                                    validation_split=validation_split, sample_weight=weight_train, 
+                                                    verbose=verbose)
+    
+            else:
+                print("Not Using Callbacks")
+    
+                self.history = self.model_NN.fit(scaled_data_train, label_train, 
+                                                    epochs=number_of_epochs, batch_size=batch_size, 
+                                                    validation_split=validation_split, sample_weight=weight_train, 
+                                                    verbose=verbose)
+            
+            K.clear_session()
         
-        K.clear_session()
-        
-        print("Finished Training")
+            print("Finished Training")
+    
+            saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
+            print(saved_scaler)
+    
+            model_json = self.model_NN.to_json()
+            with open(f"{self.path_to_models}model_arch{ensemble_index}.json", "w") as json_file:
+                json_file.write(model_json)
+    
+            # serialize weights to HDF5
+            self.model_NN.save_weights(f"{self.path_to_models}model_weights{ensemble_index}.weights.h5")
+    
+            np.save(f"{self.path_to_models}num_events_random_state_train_holdout_split.npy", 
+                    np.array([holdout_num, self.random_state_holdout]))
+    
+            dump(self.scaler, saved_scaler, compress=True)
+    
+            plot_loss(self.history, path_to_figures=self.path_to_figures)
 
-        saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
-        print(saved_scaler)
-
-        model_json = self.model_NN.to_json()
-        with open(f"{self.path_to_models}model_arch{ensemble_index}.json", "w") as json_file:
-            json_file.write(model_json)
-
-        # serialize weights to HDF5
-        self.model_NN.save_weights(f"{self.path_to_models}model_weights{ensemble_index}.weights.h5")
-
-        dump(self.scaler, saved_scaler, compress=True)
-
-        plot_loss(self.history, path_to_figures=self.path_to_figures)
+            
+            
 
         # Redo the split with all the columns in the original dataset
         self.train_data_eval, self.holdout_data_eval,\
@@ -299,21 +310,27 @@ class TrainEvaluate_NN:
 
             self.calibration_switch = True
 
-            calibration_data_num = train_data_prediction[self.train_labels_eval==1]
-            calibration_data_den = train_data_prediction[self.train_labels_eval==0]
+            if not load_trained_models:
 
-            w_num = self.train_weights_eval[self.train_labels_eval==1]
-            w_den = self.train_weights_eval[self.train_labels_eval==0]
-        
-            self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
-                                                             nbins=num_bins_cal, method='direct', mode='dynamic')
-
-            file_calib = open(f"{self.path_to_models}model_calibrated_hist.obj", 'wb') 
-
-            pickle.dump(self.histogram_calibrator, file_calib)
-
-            train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
-            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
+                calibration_data_num = train_data_prediction[self.train_labels_eval==1]
+                calibration_data_den = train_data_prediction[self.train_labels_eval==0]
+    
+                w_num = self.train_weights_eval[self.train_labels_eval==1]
+                w_den = self.train_weights_eval[self.train_labels_eval==0]
+            
+                self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
+                                                                 nbins=num_bins_cal, method='direct', mode='dynamic')
+    
+                file_calib = open(f"{self.path_to_models}model_calibrated_hist.obj", 'wb') 
+    
+                pickle.dump(self.histogram_calibrator, file_calib)
+    
+                train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+                holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
+                
+            else:
+                file_calib = open(f"{self.path_to_models}model_calibrated_hist.obj", 'rb') 
+                self.histogram_calibrator = pickle.load(file_calib)
 
         else:
             holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
@@ -347,14 +364,12 @@ class TrainEvaluate_NN:
                 print(f"WARNING: {name} {dataset} data has min score = 0, which may indicate numerical instability!")
             
             if min_val == 0:
-                print(f"WARNING: {name} {dataset} data has max score = 1, which may indicate numerical instability!")
+                print(f"WARNING: {name} {dataset} data has max score = 1, which may indicate numerical instability!")            
 
 
 
 
     def get_trained_model(self, path_to_models, calibration = False, ensemble_index=''):
-
-        self.calibration = calibration
 
         json_file = open(path_to_models+'/model_arch.json', "r")
 
@@ -362,15 +377,17 @@ class TrainEvaluate_NN:
 
         json_file.close()
 
-        self.model_NN = model_from_json(loaded_model_json)
+        model = model_from_json(loaded_model_json)
 
-        self.model_NN.load_weights(path_to_models+'/model_weights.weights.h5')
+        model.load_weights(path_to_models+'/model_weights.weights.h5')
 
         opt = tf.keras.optimizers.Nadam(learning_rate=0.1)
 
-        self.model_NN.compile(loss='binary_crossentropy', optimizer=opt)
+        model.compile(loss='binary_crossentropy', optimizer=opt)
 
-        self.scaler = load(path_to_models+'/model_scaler.bin')
+        scaler = load(path_to_models+'/model_scaler.bin')
+
+        return scaler, model
 
     
     def predict_with_model(self, data, use_log_loss=False):
@@ -384,10 +401,6 @@ class TrainEvaluate_NN:
             pred = convert_to_score(pred)
 
         if (self.calibration) & (self.calibration_switch):
-
-            # eps = 1e-13
-            # pred = self.iso_reg.transform(pred)
-            # pred = np.clip(pred.reshape(pred.shape[0],), eps, 1-eps)
 
             pred = self.histogram_calibrator.cali_pred(pred)
             pred = pred.reshape(pred.shape[0],)
