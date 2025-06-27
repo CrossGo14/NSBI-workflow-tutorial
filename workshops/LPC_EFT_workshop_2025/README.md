@@ -1,6 +1,11 @@
 FAIR Universe challenge
 ===
 
+Processed dataset available here: 
+
+EOS path: `/eos/user/j/jsandesa/EFT_workshop_data/input_data_for_LPC_workshop.tar.gz`
+Download: [CERNbox link](https://cernbox.cern.ch/s/zebMtgCM0JmbRxm)
+
 The objective of FAIR Universe is to build an open, large-compute-scale AI ecosystem for sharing datasets, training & fine-tuning large models, and benchmarks in HEP (particle physics and cosmology). 
 
 They host challenges focusing on measuring and minimizing the effects of systematic uncertainties in HEP.
