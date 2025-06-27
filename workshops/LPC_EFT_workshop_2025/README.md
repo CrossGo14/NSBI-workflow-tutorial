@@ -26,6 +26,10 @@ scp <your_user_name>@lxplus.cern.ch:/eos/user/j/jsandesa/EFT_workshop_data/input
 
 If you do not have an lxplus account, you can download the dataset using the [CERNbox link](https://cernbox.cern.ch/s/zebMtgCM0JmbRxm).
 
+```
+curl -OL https://cernbox.cern.ch/s/zebMtgCM0JmbRxm/download
+```
+
 Move the `input_data_for_LPC_workshop.tar.gz` to the `workshops/LPC_EFT_workshop_2025/` directory if it is not already there, and do:
 
 ```
