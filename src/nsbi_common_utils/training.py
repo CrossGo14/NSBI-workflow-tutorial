@@ -214,6 +214,8 @@ class TrainEvaluate_NN:
 
         if load_trained_models:
 
+            print(f"Reading saved models from {self.path_to_models}")
+
             self.scaler, self.model_NN = self.get_trained_model(self.path_to_models)
 
         else:
