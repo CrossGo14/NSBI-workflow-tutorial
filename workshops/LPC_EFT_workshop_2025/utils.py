@@ -112,11 +112,16 @@ def plot_kinematic_features(
     # Prepare color/linestyle maps
     palette = plt.rcParams['axes.prop_cycle'].by_key()['color']
     color_label_map = {lbl: palette[i % len(palette)] for i, lbl in enumerate(labels_dict)}
-    linestyle_map = {
-        variations_to_plot[0]: '-',
-        variations_to_plot[1]: '--',
-        variations_to_plot[2]: '--'
-    }
+    if len(variations_to_plot)>1:
+        linestyle_map = {
+            variations_to_plot[0]: '-',
+            variations_to_plot[1]: '--',
+            variations_to_plot[2]: '--'
+        }
+    else:
+        linestyle_map = {
+            variations_to_plot[0]: '-'
+        }
 
     # Plot each feature in its own Axes
     for ax, feature in zip(axes, columns):
