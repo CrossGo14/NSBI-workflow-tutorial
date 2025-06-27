@@ -1,11 +1,9 @@
 FAIR Universe Dataset
 --
 
+In this tutorial, we will be making use of the publicly available dataset from the FAIR Universe challenge. This particular challenge provides events for the $H\to \tau\tau$ analysis, where the signal process is sub-dominant compared to the very large $Z\to \tau\tau$ and other backgrounds - ideal challenge to test the sensitivty of NSBI techniques.
+
 The tabular dataset, hosted on Zenodo (https://zenodo.org/records/15131565) is created using the particle physics simulation tools Pythia 8.2 and Delphes 3.5.0. 
-
-Since these events undergo the Delphes tool to produce simulated detector measurements, we have the advantage of potentially unlimited MC samples for development of NSBI. 
-
-The first FAIR Universe challenge provides events for the $H\to \tau\tau$ analysis, where the signal process is sub-dominant compared to the very large $Z\to \tau\tau$ and other backgrounds - ideal challenge to test the sensitivty of NSBI techniques.
 
 Example published ATLAS distribution of the $H\to \tau\tau$ process among other backgrounds. The FAIR Universe dataset uses a $\tau_{had} \tau_{lep}$ final state, like in the distribution below:
 
