@@ -8,7 +8,7 @@ path_saved_data: 'cached_data/'
 path_preselection_NN_model: 'preselection_saved_NN/'
 
 # # Features to use for training NNs
-# columns : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_had_pt', 'PRI_had_eta',
+# features : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_had_pt', 'PRI_had_eta',
 #        'PRI_had_phi', 'PRI_met', 'PRI_met_phi', 'DER_mass_transverse_met_lep',
 #        'DER_mass_vis', 'DER_pt_h', 'DER_deltar_had_lep', 'DER_pt_tot', 'DER_sum_pt',
 #        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality', 'PRI_jet_leading_pt', 'PRI_jet_leading_eta',
@@ -19,7 +19,7 @@ path_preselection_NN_model: 'preselection_saved_NN/'
 #        'DER_lep_eta_centrality', 'jet1_mask', 'jet2_mask', 'njet_0', 'njet_1', 'njet_2']
 
 # # Features to standardize before training
-# columns_scaling : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_had_pt', 'PRI_had_eta',
+# features_scaling : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_had_pt', 'PRI_had_eta',
 #        'PRI_had_phi', 'PRI_met', 'PRI_met_phi', 'DER_mass_transverse_met_lep',
 #        'DER_mass_vis', 'DER_pt_h', 'DER_deltar_had_lep', 'DER_pt_tot', 'DER_sum_pt',
 #        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality', 'PRI_jet_leading_pt', 'PRI_jet_leading_eta',
@@ -30,39 +30,14 @@ path_preselection_NN_model: 'preselection_saved_NN/'
 #        'DER_lep_eta_centrality']
 
  
-# # Features to use for training NNs
-# columns : ['DER_mass_transverse_met_lep',
-#        'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
-#        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality', 'DER_deltaeta_jet_jet', 'log_DER_mass_jet_jet',
-#        'DER_prodeta_jet_jet',
-#        'DER_lep_eta_centrality', 'jet1_mask', 'jet2_mask', 'njet_0', 'njet_1']
-
-# # Features to standardize before training
-# columns_scaling : ['DER_mass_transverse_met_lep',
-#        'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
-#        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality', 'DER_deltaeta_jet_jet', 'log_DER_mass_jet_jet',
-#        'DER_prodeta_jet_jet',
-#        'DER_lep_eta_centrality']
-
-# # Features to use for training NNs
-# columns : ['DER_mass_transverse_met_lep',
-#        'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
-#        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality',
-#        'DER_lep_eta_centrality', 'jet1_mask', 'njet_0', 'njet_1']
-
-# # Features to standardize before training
-# columns_scaling : ['DER_mass_transverse_met_lep',
-#        'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
-#        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality',
-#        'DER_lep_eta_centrality']
 
 # Features to use for training NNs
-columns : ['DER_mass_transverse_met_lep',
+features : ['DER_mass_transverse_met_lep',
        'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality']
 
 # Features to standardize before training
-columns_scaling : ['DER_mass_transverse_met_lep',
+features_scaling : ['DER_mass_transverse_met_lep',
        'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality']
 
@@ -72,7 +47,6 @@ signal_processes : ["htautau"]
 
 # Background processes in the model
 background_processes : ["ttbar", "ztautau"]
-# background_processes = ["ttbar", "ztautau", "diboson"]
 
 # choice of reference hypothesis
 ref_processes : ["htautau"] 
@@ -126,11 +100,11 @@ dict_systs:
       - up
       - dn
 
-  # JES:
-  #   process:
-  #     - htautau
-  #     - ttbar
-  #     - ztautau
-  #   directions:
-  #     - up
-  #     - dn
+  JES:
+    process:
+      - htautau
+      - ttbar
+      - ztautau
+    directions:
+      - up
+      - dn

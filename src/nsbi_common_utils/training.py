@@ -161,7 +161,6 @@ class TrainEvaluate_NN:
         self.output_name = output_name
         self.use_log_loss = use_log_loss
         self.split_using_fold = split_using_fold
-        self.calibration_switch = False
         
         self.path_to_figures = path_to_figures
         if not os.path.exists(path_to_figures):
@@ -181,11 +180,12 @@ class TrainEvaluate_NN:
              num_bins_cal = 40, callback = True, 
              callback_patience=30, callback_factor=0.01,
              activation='swish', verbose=2, ensemble_index='', 
-             validation_split=0.1, holdout_split=0.3, plot_scaled_features=False, load_trained_models = False):
-
-
+             validation_split=0.1, holdout_split=0.3, 
+              plot_scaled_features=False, load_trained_models = False,
+             recalibrate_output=False):
 
         self.calibration = calibration
+        self.calibration_switch = False
         
         if load_trained_models: 
             holdout_num, self.random_state_holdout = np.load(f"{self.path_to_models}num_events_random_state_train_holdout_split.npy")
@@ -299,7 +299,9 @@ class TrainEvaluate_NN:
         # Redo the split with all the columns in the original dataset
         self.train_data_eval, self.holdout_data_eval,\
         self.train_labels_eval, self.holdout_labels_eval, \
-        self.train_weights_eval, self.holdout_weights_eval = train_test_split(self.dataset, self.train_labels, self.weights,
+        self.train_weights_eval, self.holdout_weights_eval = train_test_split(self.dataset, 
+                                                                              self.train_labels, 
+                                                                              self.weights,
                                                                             test_size=holdout_num, 
                                                                             random_state=self.random_state_holdout,
                                                                             stratify=self.train_labels)
@@ -311,28 +313,44 @@ class TrainEvaluate_NN:
         if self.calibration:
 
             self.calibration_switch = True
+            path_to_calibrated_object = f"{self.path_to_models}model_calibrated_hist.obj"
+
+            calibration_data_num = train_data_prediction[self.train_labels_eval==1]
+            calibration_data_den = train_data_prediction[self.train_labels_eval==0]
+
+            w_num = self.train_weights_eval[self.train_labels_eval==1]
+            w_den = self.train_weights_eval[self.train_labels_eval==0]
 
             if not load_trained_models:
 
-                calibration_data_num = train_data_prediction[self.train_labels_eval==1]
-                calibration_data_den = train_data_prediction[self.train_labels_eval==0]
-    
-                w_num = self.train_weights_eval[self.train_labels_eval==1]
-                w_den = self.train_weights_eval[self.train_labels_eval==0]
+                
             
                 self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
                                                                  nbins=num_bins_cal, method='direct', mode='dynamic')
     
-                file_calib = open(f"{self.path_to_models}model_calibrated_hist.obj", 'wb') 
+                file_calib = open(path_to_calibrated_object, 'wb') 
     
                 pickle.dump(self.histogram_calibrator, file_calib)
     
-                train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
-                holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
                 
             else:
-                file_calib = open(f"{self.path_to_models}model_calibrated_hist.obj", 'rb') 
-                self.histogram_calibrator = pickle.load(file_calib)
+                if not os.path.exists(path_to_calibrated_object) or recalibrate_output:
+                    
+                    print(f"Calibrating the saved model with {num_bins_cal} bins")
+                    
+                    self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
+                                                                 nbins=num_bins_cal, method='direct', mode='dynamic')
+    
+                    file_calib = open(path_to_calibrated_object, 'wb') 
+        
+                    pickle.dump(self.histogram_calibrator, file_calib)
+                else:
+                
+                    file_calib = open(path_to_calibrated_object, 'rb') 
+                    self.histogram_calibrator = pickle.load(file_calib)
+                    
+            train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
 
         else:
             holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
