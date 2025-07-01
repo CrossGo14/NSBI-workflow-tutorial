@@ -501,6 +501,9 @@ class TrainEvaluate_NN:
         
 
     def make_overfit_plots(self):
+        '''
+        Plot predictions for training and holdout to test compatibility
+        '''
 
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
         from nsbi_common_utils.plotting import plot_overfit
@@ -515,7 +518,11 @@ class TrainEvaluate_NN:
 
 
     def make_calib_plots(self, observable='score', nbins=10):
+        '''
+        Test the probability calibration of NN output
 
+        observable: choose between 'score' for relative probability p_A/p_A+p_B, and 'llr' for log-likelihood ratio log p_A/p_B
+        '''
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
         from nsbi_common_utils.plotting import plot_calibration_curve, plot_calibration_curve_ratio
 
@@ -528,9 +535,8 @@ class TrainEvaluate_NN:
                                    self.path_to_figures, nbins=nbins, 
                                    label="Calibration Curve - "+str(self.sample_name[0]))
 
-        # Plot Calibration curves - nll function
         elif observable=='llr':
-        
+            # Plot Calibration curves - nll function
             plot_calibration_curve_ratio(self.label_0_tpred, self.w_train_label_0, 
                                          self.label_1_tpred, self.w_train_label_1, 
                                          self.label_0_hpred, self.w_holdout_label_0, 
@@ -539,11 +545,17 @@ class TrainEvaluate_NN:
                                          label="Calibration Curve - "+str(self.sample_name[0]))
 
         else:
-            print("observable not recognized")
+            raise Exception("observable not recognized - choose between score and llr options")
 
 
     def make_reweighted_plots(self, variables, scale, num_bins):
+        '''
+        Test the quality of the NN predicted density ratios using a reweighting check p_A/p_B * p_B ~ p_A
 
+        variables: list of variables to plot
+        scale: linear or log y-axis scales
+        num_bins: number of bins in the reweighting diagnostic plot
+        '''
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
         from nsbi_common_utils.plotting import plot_reweighted
 
@@ -560,49 +572,44 @@ class TrainEvaluate_NN:
                         path_to_figures=self.path_to_figures, label='Holdout Data Diagnostic')
 
     def test_normalization(self):
-
+        '''
+        Test if \int p_A/p_B x p_B ~ 1
+        '''
         # Normalized reference (denominator) hypothesis
         weight_ref = self.weights[self.train_labels==0].copy()
 
+        # Calculate p_A/p_B for B hypothesis events
         score_rwt = self.predict_with_model(self.dataset[self.features], use_log_loss=self.use_log_loss)[self.train_labels==0]
-
         ratio_rwt = score_rwt/(1.0-score_rwt)
 
+        # Calculate \sum p_A/p_B x p_B
         print(f"The sum of PDFs is {np.sum(ratio_rwt * weight_ref)}")
 
 
     def evaluate_and_save_ratios(self, dataset):
-        
+        '''
+        Evaluate with self.model on the input dataset, and save to self.path_to_ratios
+        '''
         score_pred = self.predict_with_model(dataset[self.features], use_log_loss=self.use_log_loss)
 
         ratio = score_pred / (1.0-score_pred)
 
         np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio)
 
-
-def fill_histograms_wError(data, weights, edges, histrange, epsilon, normalize=True):
-        
-    h, _ = np.histogram(data, edges, histrange, weights=weights)
-    
-    if normalize:
-        
-        i = np.sum(h)
-
-        h = h/i
-
-    h_err, _ = np.histogram(data, edges, histrange, weights=weights**2)
-
-    if normalize:
-        
-        h_err = h_err/(i**2)
-    
-    return h, h_err
-
-
-def build_model(n_hidden=4, n_neurons=1000, learning_rate=0.1, 
-                input_shape=[11], use_log_loss=False, optimizer_choice='Nadam', 
+def build_model(n_hidden=4, 
+                n_neurons=1000, 
+                learning_rate=0.1, 
+                input_shape=[11], 
+                use_log_loss=False, 
+                optimizer_choice='Nadam', 
                 activation='swish'):
-    
+    '''
+    Method that builds the NN model used in density ratio training
+
+    activation: string with any activation function supported by keras. Option to use 'mish' too
+    optimizer_choice: Two options to choose from - 'Nadam' or 'Adam'
+    use_log_loss: option to use modified BCE loss function that regresses to log p_A/p_B
+    '''
     model = tf.keras.models.Sequential()
     options = {"input_shape":input_shape}
     for layer in range(n_hidden):
@@ -614,9 +621,13 @@ def build_model(n_hidden=4, n_neurons=1000, learning_rate=0.1,
                 x = tf.multiply(x, inputs)
                 return x
 
-            model.add(Dense(n_neurons, activation=mish, **options))
+            model.add(Dense(n_neurons, 
+                            activation=mish, 
+                            **options))
         else:
-            model.add(Dense(n_neurons, activation=activation, **options))
+            model.add(Dense(n_neurons, 
+                            activation=activation, 
+                            **options))
         options={}
 
     if not use_log_loss:
@@ -628,13 +639,23 @@ def build_model(n_hidden=4, n_neurons=1000, learning_rate=0.1,
         optimizer = tf.keras.optimizers.Nadam(learning_rate=learning_rate) 
     elif optimizer_choice=='Adam':
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate) 
+    else:
+        raise Exception("Optimizer choice not recognized - please choose between 'Nadam' or 'Adam'")
 
     if use_log_loss:
-        model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True), optimizer=optimizer, weighted_metrics=['binary_accuracy'])
+        # Use the modified BCE loss that regresses to the log p_A/p_B instead of p_A/p_A+p_B
+        model.compile(loss=tf.keras.losses.BinaryCrossentropy(from_logits=True), 
+                      optimizer=optimizer, 
+                      weighted_metrics=['binary_accuracy'])
     else:
-        model.compile(loss=tf.keras.losses.BinaryCrossentropy(), optimizer=optimizer, weighted_metrics=['binary_accuracy'])
+        model.compile(loss=tf.keras.losses.BinaryCrossentropy(), 
+                      optimizer=optimizer, 
+                      weighted_metrics=['binary_accuracy'])
     return model
 
-def convert_to_score(logLR):
 
+def convert_to_score(logLR):
+    '''
+    Convert regressed logLR into relative probabilities for compatibility with other methods
+    '''
     return 1.0/(1.0+np.exp(-logLR))
