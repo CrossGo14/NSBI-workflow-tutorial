@@ -36,6 +36,11 @@ class nsbi_inference:
         self.list_params_all                = list_params_all
         self.ratio_variations               = ratio_variations
 
+        # Inputs for vectorized calculation
+        # convert process lists into integer indices
+        self._fp_idx = jnp.array([self.process_index[p][0] for p in self.floating_processes])
+        self._fi_idx = jnp.array([self.process_index[p][0] for p in self.fixed_processes])
+
 
     # poynomial interpolation, same as HistFactory
     def poly_interp(self, tuple_input):
@@ -83,8 +88,8 @@ class nsbi_inference:
         
             # Strategy 5 of RooFit:
             combined_var_array_alpha += combined_var_array_alpha * jax.lax.cond(jnp.abs(param)<=1.0, 
-                                                                                jax.jit(self.poly_interp), 
-                                                                                jax.jit(self.exp_interp), 
+                                                                                self.poly_interp, 
+                                                                                self.exp_interp, 
                                                                                 (param, combined_var_up_NP, combined_var_down_NP))            
             return combined_var_array_alpha, None
 
@@ -96,12 +101,41 @@ class nsbi_inference:
 
         return combined_var_array
 
+    # per-process yield contribution function
+    def nu_float_contrib(self, param_vec, yields, variations):
+        # return param_vec * yields * variations
+        return param_vec * yields * variations
+
+    # per-process yield contribution function
+    def nu_fixed_contrib(self, yields, variations):
+        return yields * variations
+
+    def calculate_parameterized_yields_vectorized(self, param_vec, hist_yields, hist_vars):
+        
+        # stack yields and vars
+        hist_yields_float_vec = jnp.stack([hist_yields[p] for p in self.floating_processes])
+        hist_vars_float_vec = jnp.stack([hist_vars  [p] for p in self.floating_processes])
+    
+        # vectorize over the process dimension
+        nu_float = jnp.sum(jax.vmap(self.nu_float_contrib)(param_vec[self._fp_idx], hist_yields_float_vec, hist_vars_float_vec), axis=0)
+        
+        if len(self.fixed_processes)>0:
+            hist_yields_fixed_vec = jnp.stack([hist_yields[p] for p in self.fixed_processes])
+            hist_vars_fixed_vec = jnp.stack([hist_vars  [p] for p in self.fixed_processes])
+        
+            nu_fixed = jnp.sum(jax.vmap(self.nu_fixed_contrib)(hist_yields_float_vec, hist_vars_float_vec), axis=0)
+            
+        else:
+            nu_fixed = 0
+    
+        return nu_float + nu_fixed
+
 
     # parameterized yields calculation
     def calculate_parameterized_yields(self, param_vec, hist_yields, hist_vars):
 
         nu_tot = 0.0
-
+        
         for process in self.floating_processes:
 
             # This will not work in the general case where model is non-linear in POI, needs modifications (TO-DO)
@@ -112,6 +146,18 @@ class nsbi_inference:
             nu_tot += hist_yields[process] * hist_vars[process]
 
         return nu_tot
+
+    # parameterized log-likelihood ratio calculation
+    def calculate_parameterized_ratios_vectorized(self, param_vec, nu_nominal, nu_vars, ratios, ratio_vars):
+
+        # stack yields and vars
+        ratios_float_vec = jnp.stack([nu_nominal[p]*ratios[p] for p in self.floating_processes])
+        ratios_vars_float_vec = jnp.stack([nu_vars[p] * ratio_vars  [p] for p in self.floating_processes])
+
+        # vectorize over the process dimension
+        dnu_dx_float = jnp.sum(jax.vmap(self.nu_float_contrib)(param_vec[self._fp_idx], ratios_float_vec, ratios_vars_float_vec), axis=0)
+            
+        return jnp.log( dnu_dx_float )
 
     # parameterized log-likelihood ratio calculation
     def calculate_parameterized_ratios(self, param_vec, nu_nominal, nu_vars, ratios, ratio_vars):
@@ -147,7 +193,7 @@ class nsbi_inference:
                                                                                 self.hist_channel_variations[channel][process]['up'],
                                                                                 self.hist_channel_variations[channel][process]['dn'])           
 
-            nu_hist_channel = self.calculate_parameterized_yields(param_vec, 
+            nu_hist_channel = self.calculate_parameterized_yields_vectorized(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
@@ -170,7 +216,7 @@ class nsbi_inference:
                                                                                 self.ratio_variations[channel][process]['up'],
                                                                                 self.ratio_variations[channel][process]['dn'])
 
-            nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
+            nu_tot_unbinned = self.calculate_parameterized_yields_vectorized(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
@@ -178,7 +224,7 @@ class nsbi_inference:
 
             llr_tot += self.pois_loglikelihood(data_hist_channel, nu_tot_unbinned)
 
-            llr_pe = self.calculate_parameterized_ratios(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
+            llr_pe = self.calculate_parameterized_ratios_vectorized(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
                                                         self.ratios[channel], self.ratio_vars[channel]) \
                     - jnp.log(nu_tot_unbinned)
 
@@ -198,7 +244,7 @@ class nsbi_inference:
 
             self.hist_vars[channel] = {key: jnp.ones_like(value) for key, value in self.hist_channels[channel].items()}
 
-            nu_hist_channel = self.calculate_parameterized_yields(param_vec, 
+            nu_hist_channel = self.calculate_parameterized_yields_vectorized(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
@@ -211,7 +257,7 @@ class nsbi_inference:
 
             self.hist_vars[channel] = {key: jnp.ones_like(value) for key, value in self.hist_channels[channel].items()}
             
-            nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
+            nu_tot_unbinned = self.calculate_parameterized_yields_vectorized(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
@@ -221,7 +267,7 @@ class nsbi_inference:
 
             self.ratio_vars[channel] = {key: jnp.ones_like(value) for key, value in self.ratios[channel].items()}
 
-            llr_pe = self.calculate_parameterized_ratios(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
+            llr_pe = self.calculate_parameterized_ratios_vectorized(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
                                                         self.ratios[channel], self.ratio_vars[channel]) \
                     - jnp.log(nu_tot_unbinned)
 

@@ -4,65 +4,69 @@ import numpy as np
 import pandas as pd
 import math
 pd.options.mode.chained_assignment = None 
-import matplotlib.pyplot as plt
-#keras.models.Model.predict_proba = keras.models.Model.predict
-from numpy import asarray
-from numpy import savetxt
-from numpy import loadtxt
 
 import pickle 
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, BatchNormalization
 from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.callbacks import ModelCheckpoint
 import tensorflow.keras.backend as K
 from tensorflow.keras import layers
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Dense, Dropout, Layer
-import mplhep as hep
-import random
+from tensorflow.keras.layers import Dense
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import RobustScaler
-from sklearn.preprocessing import QuantileTransformer, PowerTransformer
-from sklearn.isotonic import IsotonicRegression
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer
 from sklearn.compose import ColumnTransformer
-from sklearn.utils import class_weight, resample
 from joblib import dump, load
 
-from sklearn.metrics import roc_curve, roc_auc_score 
 
 import pickle 
 
-import nsbi_common_utils.plotting
 from nsbi_common_utils.plotting import plot_loss, plot_all_features
 from nsbi_common_utils.calibration import HistogramCalibrator
 
 importlib.reload(sys.modules['nsbi_common_utils.plotting'])
 from nsbi_common_utils.plotting import plot_all_features
 
-from sklearn.utils import class_weight
 from joblib import dump, load
 
 from tensorflow.keras.models import model_from_json
 
 class TrainEvaluatePreselNN:
-    
-    def __init__(self, dataset, num_classes, columns, columns_scaling):
-        
+    '''
+    A class for training the multi-class classification neural network for preselecting phase space for SBI
+    '''
+    def __init__(self, dataset, num_classes, features, features_scaling):
+        '''
+        dataset: dataframe with the multiple classes for training
+        num_classes: number of classes corresponding to the number of output nodes of softmax layer
+        features: input features to use for training
+        features_scaling: subset of input features to standardize before training
+        '''
         self.dataset = dataset
-        self.data_features_training = dataset[columns].copy()
-        self.columns = columns
-        self.columns_scaling = columns_scaling
+        self.data_features_training = dataset[features].copy()
+        self.features = features
+        self.features_scaling = features_scaling
         self.num_classes = num_classes
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
-    def train(self, test_size=0.15, random_state=42, path_to_save='', epochs=20, batch_size=1024, verbose=2, learning_rate=0.1):
+    def train(self, test_size=0.15, 
+                    random_state=42, 
+                    path_to_save='', 
+                    epochs=20, 
+                    batch_size=1024, 
+                    verbose=2, 
+                    learning_rate=0.1):
+
+        '''
+        The function will train the preselection NN, assign it to self.model variable, and save the model to user-provided path_to_save directory.
+
+        test_size: the fraction of dataset to set aside for diagnostics, not used in training and validation of the loss vs epoch curves
+        random_state: random state to use for splitting the train/test dataset before training NN
+        epochs: the number of epochs to train the NNs
+        batch_size: the size of each batch used during gradient optimization
+        learning_rate: the initial learning rate to pass to the optimizer
+        '''
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
@@ -73,7 +77,7 @@ class TrainEvaluatePreselNN:
                                                                                     stratify=self.dataset['train_labels'])
 
         # Standardize the input features
-        self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.columns_scaling)],remainder='passthrough')
+        self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.features_scaling)],remainder='passthrough')
         X_train = self.scaler.fit_transform(X_train)  # Fit & transform training data
         X_val = self.scaler.transform(X_val)
         
@@ -82,15 +86,18 @@ class TrainEvaluatePreselNN:
             layers.Input(shape=(self.data_features_training.shape[1],)),  # Input layer
             layers.Dense(1000, activation='swish'),
             layers.Dense(1000, activation='swish'),
-            layers.Dense(self.num_classes, activation='softmax')  # Output layer for 5 classes
+            layers.Dense(self.num_classes, activation='softmax')  # Output layer for num_class classes
         ])
 
+        # Using the Nadam optimizer by default
         optimizer = tf.keras.optimizers.Nadam(learning_rate=learning_rate)
+
         # Compile the model
         self.model.compile(optimizer=optimizer,
                       loss='sparse_categorical_crossentropy',
                       weighted_metrics=["accuracy"])
         
+        # setup the callbacks
         callback_factor = 0.01
         callback_patience = 30
         reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=callback_factor,
@@ -99,7 +106,10 @@ class TrainEvaluatePreselNN:
         # Train the model with sample weights
         self.model.fit(X_train, y_train, sample_weight=weight_train, 
                   validation_data=(X_val, y_val, weight_val), callbacks=[reduce_lr], epochs=epochs, batch_size=batch_size, verbose=verbose)
+
         K.clear_session()
+
+        # Save the trained model if user provides with a path
         if path_to_save!='':
 
             if not os.path.exists(path_to_save):
@@ -112,12 +122,17 @@ class TrainEvaluatePreselNN:
             # serialize weights to HDF5
             self.model.save_weights(path_to_save+"model_weights_presel.weights.h5")
 
+            # Save the standard scaling
             saved_scaler = path_to_save+"model_scaler_presel.bin"
             dump(self.scaler, saved_scaler, compress=True)
 
 
     def get_trained_model(self, path_to_models):
+        '''
+        Method to load the trained model
 
+        path_to_models: path to the directory with saved model config files
+        '''
         json_file = open(path_to_models+'/model_arch_presel.json', "r")
 
         loaded_model_json = json_file.read()
@@ -134,8 +149,12 @@ class TrainEvaluatePreselNN:
 
 
     def predict(self, dataset):
+        '''
+        Method that evaluates density ratios on provided dataset, using self.model
 
-        features_scaled = self.scaler.transform(dataset[self.columns])
+        dataset: the dataset to evaluate trained model on
+        '''
+        features_scaled = self.scaler.transform(dataset[self.features])
         pred_NN = self.model.predict(features_scaled, batch_size=10000)
         K.clear_session()
         
