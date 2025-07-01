@@ -163,17 +163,36 @@ class TrainEvaluatePreselNN:
         
 
 class TrainEvaluate_NN:
-
-    def __init__(self, dataset, weights, train_labels, columns, columns_scaling, 
-                rnd_seed, sample_name, output_dir, output_name, path_to_figures='',
-                     path_to_models='', path_to_ratios='',
-                     use_log_loss=False, split_using_fold=False):
-
+    '''
+    A class for training the density ratio neural networks for SBI analysis
+    '''
+    def __init__(self, dataset, 
+                      weights, 
+                      train_labels, 
+                      features, 
+                      features_scaling, 
+                      rnd_seed, 
+                      sample_name, 
+                      output_dir, 
+                      output_name, 
+                      path_to_figures='',
+                      path_to_models='', 
+                      path_to_ratios='',
+                      use_log_loss=False, 
+                      split_using_fold=False):
+        '''
+        dataset: the main dataframe containing two classes p_A, p_B for density ratio p_A/p_B estimation
+        weights: the weight vector, normalized independently for each class A & B
+        train_labels: array of 1s for p_A hypothesis and 0s for p_B hypothesis
+        features: training features x in p_A(x)/p_B(x)
+        features_scaling: training features to standardize before training
+        sample_name: set with strings containing names of A and B
+        '''
         self.dataset = dataset
         self.weights = weights
         self.train_labels = train_labels
-        self.columns = columns
-        self.columns_scaling = columns_scaling
+        self.features = features
+        self.features_scaling = features_scaling
         self.random_state_holdout = rnd_seed
         self.sample_name = sample_name
         self.output_dir = output_dir
@@ -194,21 +213,46 @@ class TrainEvaluate_NN:
                 os.makedirs(path_to_ratios)
         
 
-    def train(self, hidden_layers, neurons, number_of_epochs, batch_size,
-             learning_rate, scalerType, calibration=False, 
-             num_bins_cal = 40, callback = True, 
-             callback_patience=30, callback_factor=0.01,
-             activation='swish', verbose=2, ensemble_index='', 
-             validation_split=0.1, holdout_split=0.3, 
-              plot_scaled_features=False, load_trained_models = False,
-             recalibrate_output=False):
+    def train(self, hidden_layers, 
+                    neurons, 
+                    number_of_epochs, 
+                    batch_size,
+                    learning_rate, 
+                    scalerType, 
+                    calibration=False, 
+                    num_bins_cal = 40, 
+                    callback = True, 
+                    callback_patience=30, 
+                    callback_factor=0.01,
+                    activation='swish', 
+                    verbose=2, 
+                    ensemble_index='', 
+                    validation_split=0.1, 
+                    holdout_split=0.3, 
+                    plot_scaled_features=False, 
+                    load_trained_models = False,
+                    recalibrate_output=False):
+        '''
+        Method that trains the density ratio NNs
+
+        batch_size: the size of each batch used during gradient optimization
+        learning_rate: the initial learning rate to pass to the optimizer
+        scalerType: option to one of three standardizing options: ['MinMax', 'StandardScaler', 'PowerTransform_Yeo'] 
+        holdout_split: the fraction of dataset to set aside for diagnostics, not used in training and validation of the loss vs epoch curves
+        epochs: the number of epochs to train the NNs
+
+        calibration: boolean to do Histogram-based calibration of the NN ourput
+        num_bins_cal: number of bins used for calibration histogram
+        '''
 
         self.calibration = calibration
-        self.calibration_switch = False
+        self.calibration_switch = False # Set the switch to false for first evaluation for calibration
         
         if load_trained_models: 
+            # Load the number of holdout events and random state used for train/test split when using saved models
             holdout_num, self.random_state_holdout = np.load(f"{self.path_to_models}num_events_random_state_train_holdout_split.npy")
         else:
+            # Get the number of holdout events from the holdout_split fraction
             holdout_num   = math.floor(self.dataset.shape[0]*holdout_split)
 
         
@@ -218,45 +262,43 @@ class TrainEvaluate_NN:
 
         data_train, data_holdout, \
         label_train, label_holdout, \
-        weight_train, weight_holdout = train_test_split(self.dataset[self.columns], 
+        weight_train, weight_holdout = train_test_split(self.dataset[self.features], 
                                                         self.train_labels, 
                                                         self.weights, 
                                                         test_size=holdout_num, 
                                                         random_state=self.random_state_holdout,
                                                         stratify=self.train_labels)
 
-
+        # Setup callbacks
         reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=callback_factor,
                                         patience=callback_patience, min_lr=0.000000001)
-
         es = EarlyStopping(monitor='val_loss', mode='min', verbose=2, patience=300)
 
         if load_trained_models:
 
             print(f"Reading saved models from {self.path_to_models}")
-
             self.scaler, self.model_NN = self.get_trained_model(self.path_to_models)
 
         else:
 
             if (scalerType == 'MinMax'):
-                self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.columns_scaling)],remainder='passthrough')
+                self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.features_scaling)],remainder='passthrough')
                 
             if (scalerType == 'StandardScaler'):
-                self.scaler = ColumnTransformer([("scaler",StandardScaler(), self.columns_scaling)],remainder='passthrough')
+                self.scaler = ColumnTransformer([("scaler",StandardScaler(), self.features_scaling)],remainder='passthrough')
                 
             if (scalerType == 'PowerTransform_Yeo'):
-                self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.columns_scaling)],remainder='passthrough')
+                self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.features_scaling)],remainder='passthrough')
 
 
         scaled_data_train = self.scaler.fit_transform(data_train)
-        scaled_data_train= pd.DataFrame(scaled_data_train, columns=self.columns)
+        scaled_data_train= pd.DataFrame(scaled_data_train, columns=self.features)
 
         if plot_scaled_features:
             plot_all_features(scaled_data_train, weight_train, label_train)
 
         scaled_data_holdout = self.scaler.transform(data_holdout)
-        scaled_data_holdout = pd.DataFrame(scaled_data_holdout, columns=self.columns)
+        scaled_data_holdout = pd.DataFrame(scaled_data_holdout, columns=self.features)
 
         if not load_trained_models:
 
@@ -268,7 +310,7 @@ class TrainEvaluate_NN:
     
             self.model_NN = build_model(n_hidden=hidden_layers, n_neurons=neurons, 
                                         learning_rate=learning_rate, 
-                                        input_shape=[len(self.columns)], 
+                                        input_shape=[len(self.features)], 
                                         use_log_loss=self.use_log_loss,
                                         activation=activation)
     
@@ -315,7 +357,7 @@ class TrainEvaluate_NN:
             
             
 
-        # Redo the split with all the columns in the original dataset
+        # Redo the split with all the features in the original dataset, using the same random state
         self.train_data_eval, self.holdout_data_eval,\
         self.train_labels_eval, self.holdout_labels_eval, \
         self.train_weights_eval, self.holdout_weights_eval = train_test_split(self.dataset, 
@@ -325,10 +367,10 @@ class TrainEvaluate_NN:
                                                                             random_state=self.random_state_holdout,
                                                                             stratify=self.train_labels)
         
-
+        # Do a first prediction without calibration layers
         train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
 
-
+        # If calibrating, use the train_data_prediction for building histogram
         if self.calibration:
 
             self.calibration_switch = True
@@ -341,8 +383,6 @@ class TrainEvaluate_NN:
             w_den = self.train_weights_eval[self.train_labels_eval==0]
 
             if not load_trained_models:
-
-                
             
                 self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
                                                                  nbins=num_bins_cal, method='direct', mode='dynamic')
@@ -351,7 +391,6 @@ class TrainEvaluate_NN:
     
                 pickle.dump(self.histogram_calibrator, file_calib)
     
-                
             else:
                 if not os.path.exists(path_to_calibrated_object) or recalibrate_output:
                     
@@ -371,20 +410,23 @@ class TrainEvaluate_NN:
             train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
             holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
 
+        # Else, continue evaluating using the base model
         else:
             holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
 
-
+        # Prediction arrays for holdout subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
         self.label_0_hpred = holdout_data_prediction[label_holdout==0].copy()
         self.label_1_hpred = holdout_data_prediction[label_holdout==1].copy()
 
+        # Weight arrays for holdout subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
         self.w_holdout_label_0 = weight_holdout[label_holdout==0].copy()
         self.w_holdout_label_1 = weight_holdout[label_holdout==1].copy()
 
-
+        # Prediction arrays for training subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
         self.label_0_tpred = train_data_prediction[label_train==0].copy()
         self.label_1_tpred = train_data_prediction[label_train==1].copy()
         
+        # Weight arrays for training subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
         self.w_train_label_0 = weight_train[label_train==0].copy()
         self.w_train_label_1 = weight_train[label_train==1].copy()
 
@@ -408,8 +450,12 @@ class TrainEvaluate_NN:
 
 
 
-    def get_trained_model(self, path_to_models, calibration = False, ensemble_index=''):
+    def get_trained_model(self, path_to_models ensemble_index=''):
+        '''
+        Method to load the trained model
 
+        path_to_models: path to the directory with saved model config files
+        '''
         json_file = open(path_to_models+'/model_arch.json', "r")
 
         loaded_model_json = json_file.read()
@@ -430,7 +476,11 @@ class TrainEvaluate_NN:
 
     
     def predict_with_model(self, data, use_log_loss=False):
+        '''
+        Method that evaluates density ratios on provided dataset, using self.model
 
+        data: the dataset to evaluate trained model on
+        '''
         scaled_data = self.scaler.transform(data)
         pred = self.model_NN.predict(scaled_data, verbose=2, batch_size=10000)
         pred = pred.reshape(pred.shape[0],)
@@ -514,7 +564,7 @@ class TrainEvaluate_NN:
         # Normalized reference (denominator) hypothesis
         weight_ref = self.weights[self.train_labels==0].copy()
 
-        score_rwt = self.predict_with_model(self.dataset[self.columns], use_log_loss=self.use_log_loss)[self.train_labels==0]
+        score_rwt = self.predict_with_model(self.dataset[self.features], use_log_loss=self.use_log_loss)[self.train_labels==0]
 
         ratio_rwt = score_rwt/(1.0-score_rwt)
 
@@ -523,7 +573,7 @@ class TrainEvaluate_NN:
 
     def evaluate_and_save_ratios(self, dataset):
         
-        score_pred = self.predict_with_model(dataset[self.columns], use_log_loss=self.use_log_loss)
+        score_pred = self.predict_with_model(dataset[self.features], use_log_loss=self.use_log_loss)
 
         ratio = score_pred / (1.0-score_pred)
 
