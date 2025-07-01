@@ -171,7 +171,6 @@ class TrainEvaluate_NN:
                       train_labels, 
                       features, 
                       features_scaling, 
-                      rnd_seed, 
                       sample_name, 
                       output_dir, 
                       output_name, 
@@ -193,7 +192,6 @@ class TrainEvaluate_NN:
         self.train_labels = train_labels
         self.features = features
         self.features_scaling = features_scaling
-        self.random_state_holdout = rnd_seed
         self.sample_name = sample_name
         self.output_dir = output_dir
         self.output_name = output_name
@@ -212,7 +210,54 @@ class TrainEvaluate_NN:
         if not os.path.exists(path_to_ratios):
                 os.makedirs(path_to_ratios)
         
+    def train_ensemble(self, hidden_layers, 
+                    neurons, 
+                    number_of_epochs, 
+                    batch_size,
+                    learning_rate, 
+                    scalerType, 
+                    calibration=False, 
+                    num_bins_cal = 40, 
+                    callback = True, 
+                    callback_patience=30, 
+                    callback_factor=0.01,
+                    activation='swish', 
+                    verbose=2, 
+                    validation_split=0.1, 
+                    holdout_split=0.3, 
+                    plot_scaled_features=False, 
+                    load_trained_models = False,
+                    recalibrate_output=False,
+                    num_ensemble_members=1):
+        
+        # Define an array with random integers for boostrap training
+        random_state_arr = np.random.randint(0, 2**32 -1, size=num_ensemble_members)
 
+        # Train ensemble of NNs in series
+        for ensemble_index in range(num_ensemble_members):
+            
+            # Train ensemble NNs with different train/test split each time (bootstrapping without replacement)
+            self.train(hidden_layers, 
+                        neurons, 
+                        number_of_epochs, 
+                        batch_size,
+                        learning_rate, 
+                        scalerType, 
+                        calibration, 
+                        num_bins_cal, 
+                        callback, 
+                        callback_patience, 
+                        callback_factor,
+                        activation, 
+                        verbose,
+                        rnd_seed = random_state_arr[ensemble_index], 
+                        ensemble_index, 
+                        validation_split, 
+                        holdout_split, 
+                        plot_scaled_features, 
+                        load_trained_models,
+                        recalibrate_output)
+        
     def train(self, hidden_layers, 
                     neurons, 
                     number_of_epochs, 
@@ -226,6 +271,7 @@ class TrainEvaluate_NN:
                     callback_factor=0.01,
                     activation='swish', 
                     verbose=2, 
+                    rnd_seed=2,
                     ensemble_index='', 
                     validation_split=0.1, 
                     holdout_split=0.3, 
@@ -248,12 +294,13 @@ class TrainEvaluate_NN:
         self.calibration = calibration
         self.calibration_switch = False # Set the switch to false for first evaluation for calibration
         
-        if load_trained_models: 
+        if load_trained_models:
+
             # Load the number of holdout events and random state used for train/test split when using saved models
-            holdout_num, self.random_state_holdout = np.load(f"{self.path_to_models}num_events_random_state_train_holdout_split.npy")
+            holdout_num, rnd_seed = np.load(f"{self.path_to_models}num_events_random_state_train_holdout_split{ensemble_index}.npy")
         else:
             # Get the number of holdout events from the holdout_split fraction
-            holdout_num   = math.floor(self.dataset.shape[0]*holdout_split)
+            holdout_num = math.floor(self.dataset.shape[0] * holdout_split)
 
         
         # HyperParameters for the NN training
@@ -266,8 +313,7 @@ class TrainEvaluate_NN:
                                                         self.train_labels, 
                                                         self.weights, 
                                                         test_size=holdout_num, 
-                                                        random_state=self.random_state_holdout,
-                                                        stratify=self.train_labels)
+                                                        random_state=rnd_seed,                                                        stratify=self.train_labels)
 
         # Setup callbacks
         reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=callback_factor,
@@ -277,7 +323,8 @@ class TrainEvaluate_NN:
         if load_trained_models:
 
             print(f"Reading saved models from {self.path_to_models}")
-            self.scaler, self.model_NN = self.get_trained_model(self.path_to_models)
+            self.scaler, self.model_NN = self.get_trained_model(self.path_to_models, 
+                                                                ensemble_index=member_index)
 
         else:
 
@@ -347,8 +394,8 @@ class TrainEvaluate_NN:
             # serialize weights to HDF5
             self.model_NN.save_weights(f"{self.path_to_models}model_weights{ensemble_index}.weights.h5")
     
-            np.save(f"{self.path_to_models}num_events_random_state_train_holdout_split.npy", 
-                    np.array([holdout_num, self.random_state_holdout]))
+            np.save(f"{self.path_to_models}num_events_random_state_train_holdout_split{ensemble_index}.npy", 
+                    np.array([holdout_num, rnd_seed]))
     
             dump(self.scaler, saved_scaler, compress=True)
     
@@ -364,8 +411,7 @@ class TrainEvaluate_NN:
                                                                               self.train_labels, 
                                                                               self.weights,
                                                                             test_size=holdout_num, 
-                                                                            random_state=self.random_state_holdout,
-                                                                            stratify=self.train_labels)
+                                                                            random_state=rnd_seed,                                                                            stratify=self.train_labels)
         
         # Do a first prediction without calibration layers
         train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
@@ -374,7 +420,7 @@ class TrainEvaluate_NN:
         if self.calibration:
 
             self.calibration_switch = True
-            path_to_calibrated_object = f"{self.path_to_models}model_calibrated_hist.obj"
+            path_to_calibrated_object = f"{self.path_to_models}model_calibrated_hist{ensemble_index}.obj"
 
             calibration_data_num = train_data_prediction[self.train_labels_eval==1]
             calibration_data_den = train_data_prediction[self.train_labels_eval==0]
@@ -456,7 +502,7 @@ class TrainEvaluate_NN:
 
         path_to_models: path to the directory with saved model config files
         '''
-        json_file = open(path_to_models+'/model_arch.json', "r")
+        json_file = open(path_to_models+f'/model_arch{ensemble_index}.json', "r")
 
         loaded_model_json = json_file.read()
 
@@ -464,13 +510,13 @@ class TrainEvaluate_NN:
 
         model = model_from_json(loaded_model_json)
 
-        model.load_weights(path_to_models+'/model_weights.weights.h5')
+        model.load_weights(path_to_models+f'/model_weights{ensemble_index}.weights.h5')
 
         opt = tf.keras.optimizers.Nadam(learning_rate=0.1)
 
         model.compile(loss='binary_crossentropy', optimizer=opt)
 
-        scaler = load(path_to_models+'/model_scaler.bin')
+        scaler = load(path_to_models+f'/model_scaler{ensemble_index}.bin')
 
         return scaler, model
 
