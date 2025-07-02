@@ -168,7 +168,7 @@ class TrainEvaluate_NN:
     '''
     def __init__(self, dataset, 
                       weights, 
-                      train_labels, 
+                      training_labels, 
                       features, 
                       features_scaling, 
                       sample_name, 
@@ -182,14 +182,14 @@ class TrainEvaluate_NN:
         '''
         dataset: the main dataframe containing two classes p_A, p_B for density ratio p_A/p_B estimation
         weights: the weight vector, normalized independently for each class A & B
-        train_labels: array of 1s for p_A hypothesis and 0s for p_B hypothesis
+        training_labels: array of 1s for p_A hypothesis and 0s for p_B hypothesis
         features: training features x in p_A(x)/p_B(x)
         features_scaling: training features to standardize before training
         sample_name: set with strings containing names of A and B
         '''
         self.dataset = dataset
         self.weights = weights
-        self.train_labels = train_labels
+        self.training_labels = training_labels
         self.features = features
         self.features_scaling = features_scaling
         self.sample_name = sample_name
@@ -236,11 +236,19 @@ class TrainEvaluate_NN:
         '''
         Train an ensemble of NNs
         '''
+
+        self.num_ensemble_members = num_ensemble_members
+        
         # Define an array with random integers for boostrap training
         random_state_arr = np.random.randint(0, 2**32 -1, size=num_ensemble_members)
 
-        self.model_NN = [None for i in range(num_ensemble_members)]
-        self.scaler = [None for i in range(num_ensemble_members)]
+        self.model_NN           = [None for i in range(num_ensemble_members)]
+        self.scaler             = [None for i in range(num_ensemble_members)]
+        self.full_data_prediction     = [None for i in range(num_ensemble_members)]
+
+        self.full_data_prediction = np.zeros((num_ensemble_members, len(self.weights)))
+        self.train_idx          = [None for i in range(num_ensemble_members)]
+        self.holdout_idx        = [None for i in range(num_ensemble_members)]
 
         # Train ensemble of NNs in series
         for ensemble_index in range(num_ensemble_members):
@@ -300,11 +308,20 @@ class TrainEvaluate_NN:
         num_bins_cal: number of bins used for calibration histogram
         '''
 
+        if ensemble_index=='':
+            self.model_NN           = []
+            self.scaler             = []
+            self.full_data_prediction     = []
+
+            self.full_data_prediction = np.zeros((1, len(self.weights)))
+            self.train_idx          = []
+            self.holdout_idx        = []
+            self.num_ensemble_members = 1
+
         self.calibration = calibration
         self.calibration_switch = False # Set the switch to false for first evaluation for calibration
         
         if load_trained_models:
-
             # Load the number of holdout events and random state used for train/test split when using saved models
             holdout_num, rnd_seed = np.load(f"{self.path_to_models}num_events_random_state_train_holdout_split{ensemble_index}.npy")
         else:
@@ -316,25 +333,34 @@ class TrainEvaluate_NN:
         validation_split = validation_split
         self.batch_size = batch_size
 
-        data_train, data_holdout, \
-        label_train, label_holdout, \
-        weight_train, weight_holdout = train_test_split(self.dataset[self.features], 
-                                                        self.train_labels, 
-                                                        self.weights, 
-                                                        test_size=holdout_num, 
-                                                        random_state=rnd_seed,                                                        stratify=self.train_labels)
+        idx_incl = np.arange(len(self.weights))
+
+        # Get the indicies
+        self.train_idx[ensemble_index], self.holdout_idx[ensemble_index] = train_test_split(idx_incl, 
+                                                                                            test_size=holdout_num, 
+                                                                                            random_state=rnd_seed,                                                        
+                                                                                            stratify=self.training_labels)
+
+        # split the original dataset into training and holdout
+        data_train_full, data_holdout_full = self.dataset.iloc[self.train_idx[ensemble_index]].copy(), self.dataset.iloc[self.holdout_idx[ensemble_index]].copy()
+        label_train, label_holdout = self.training_labels[self.train_idx[ensemble_index]].copy(), self.training_labels[self.holdout_idx[ensemble_index]].copy()
+        weight_train, weight_holdout = self.weights[self.train_idx[ensemble_index]].copy(), self.weights[self.holdout_idx[ensemble_index]].copy()
+
+        # dataset to be used for training
+        data_train, data_holdout = data_train_full[self.features], data_holdout_full[self.features]
 
         # Setup callbacks
         reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=callback_factor,
                                         patience=callback_patience, min_lr=0.000000001)
         es = EarlyStopping(monitor='val_loss', mode='min', verbose=2, patience=300)
 
+        # Load pre-trained models and scaling
         if load_trained_models:
 
             print(f"Reading saved models from {self.path_to_models}")
             self.scaler[ensemble_index], self.model_NN[ensemble_index] = self.get_trained_model(self.path_to_models, 
-                                                                                                ensemble_index=ensemble_index)
-
+                                                                                                ensemble_index = ensemble_index)
+        # Else setup a new scaler
         else:
 
             if (scalerType == 'MinMax'):
@@ -356,6 +382,7 @@ class TrainEvaluate_NN:
         scaled_data_holdout = self.scaler[ensemble_index].transform(data_holdout)
         scaled_data_holdout = pd.DataFrame(scaled_data_holdout, columns=self.features)
 
+        # Train the model if not loaded
         if not load_trained_models:
 
             # Check if the datasets are normalized
@@ -410,20 +437,9 @@ class TrainEvaluate_NN:
     
             plot_loss(self.history, path_to_figures=self.path_to_figures)
 
-            
-            
-
-        # Redo the split with all the features in the original dataset, using the same random state
-        self.train_data_eval, self.holdout_data_eval,\
-        self.train_labels_eval, self.holdout_labels_eval, \
-        self.train_weights_eval, self.holdout_weights_eval = train_test_split(self.dataset, 
-                                                                              self.train_labels, 
-                                                                              self.weights,
-                                                                            test_size=holdout_num, 
-                                                                            random_state=rnd_seed,                                                                            stratify=self.train_labels)
         
         # Do a first prediction without calibration layers
-        train_data_prediction = self.predict_with_model(self.train_data_eval, ensemble_index = ensemble_index, 
+        train_data_prediction = self.predict_with_model(data_train_full, ensemble_index = ensemble_index, 
                                                         use_log_loss = self.use_log_loss)
 
         # If calibrating, use the train_data_prediction for building histogram
@@ -462,53 +478,37 @@ class TrainEvaluate_NN:
                 
                     file_calib = open(path_to_calibrated_object, 'rb') 
                     self.histogram_calibrator = pickle.load(file_calib)
-                    
-            train_data_prediction = self.predict_with_model(self.train_data_eval, 
-                                                            ensemble_index = ensemble_index, 
-                                                            use_log_loss=self.use_log_loss)
-            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, 
-                                                              ensemble_index = ensemble_index, 
-                                                              use_log_loss=self.use_log_loss)
+            
+            self.full_data_prediction[ensemble_index] = self.predict_with_model(self.dataset, 
+                                                                                ensemble_index = ensemble_index, 
+                                                                                use_log_loss=self.use_log_loss)
 
         # Else, continue evaluating using the base model
         else:
-            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, 
-                                                              ensemble_index = ensemble_index, 
-                                                              use_log_loss=self.use_log_loss)
-
-        # Prediction arrays for holdout subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
-        self.label_0_hpred = holdout_data_prediction[label_holdout==0].copy()
-        self.label_1_hpred = holdout_data_prediction[label_holdout==1].copy()
-
-        # Weight arrays for holdout subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
-        self.w_holdout_label_0 = weight_holdout[label_holdout==0].copy()
-        self.w_holdout_label_1 = weight_holdout[label_holdout==1].copy()
-
-        # Prediction arrays for training subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
-        self.label_0_tpred = train_data_prediction[label_train==0].copy()
-        self.label_1_tpred = train_data_prediction[label_train==1].copy()
-        
-        # Weight arrays for training subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
-        self.w_train_label_0 = weight_train[label_train==0].copy()
-        self.w_train_label_1 = weight_train[label_train==1].copy()
+            self.full_data_prediction[ensemble_index] = self.predict_with_model(self.dataset, 
+                                                                                ensemble_index = ensemble_index, 
+                                                                                use_log_loss=self.use_log_loss)
 
         
         # Some diagnostics to ensure numerical stability - min/max must not be exactly 0 or 1
         min_max_values = [
-            (self.sample_name[1], "training", np.amin(self.label_0_tpred), np.amax(self.label_0_tpred)),
-            (self.sample_name[0], "training", np.amin(self.label_1_tpred), np.amax(self.label_1_tpred)),
-            (self.sample_name[1], "holdout", np.amin(self.label_0_hpred), np.amax(self.label_0_hpred)),
-            (self.sample_name[0], "holdout", np.amin(self.label_1_hpred), np.amax(self.label_1_hpred))
+            (self.sample_name[1], "training", np.amin(self.full_data_prediction[ensemble_index][self.train_idx][self.training_labels==0]), 
+                                              np.amax(self.full_data_prediction[ensemble_index][self.train_idx][self.training_labels==0])),
+            (self.sample_name[0], "training", np.amin(self.full_data_prediction[ensemble_index][self.train_idx][self.training_labels==1]), 
+                                              np.amax(self.full_data_prediction[ensemble_index][self.train_idx][self.training_labels==1])),
+            (self.sample_name[1], "holdout", np.amin(self.full_data_prediction[ensemble_index][self.holdout_idx][self.training_labels==0]), 
+                                              np.amax(self.full_data_prediction[ensemble_index][self.holdout_idx][self.training_labels==0])),
+            (self.sample_name[0], "holdout", np.amin(self.full_data_prediction[ensemble_index][self.holdout_idx][self.training_labels==1]), 
+                                              np.amax(self.full_data_prediction[ensemble_index][self.holdout_idx][self.training_labels==1]))
         ]
         
-        for name, dataset, min_val, max_val in min_max_values:
+        for name, training_holdout_label, min_val, max_val in min_max_values:
             
             if min_val == 0:
-                print(f"WARNING: {name} {dataset} data has min score = 0, which may indicate numerical instability!")
+                raise Warning(f"WARNING: {name} {training_holdout_label} data has min score = 0 for ensemble member {ensemble_index}, which may indicate numerical instability!")
             
             if max_val == 1:
-                print(f"WARNING: {name} {dataset} data has max score = 1, which may indicate numerical instability!")            
-
+                raise Watning(f"WARNING: {name} {training_holdout_label} data has max score = 1 for ensemble member {ensemble_index}, which may indicate numerical instability!")            
 
 
 
@@ -543,7 +543,7 @@ class TrainEvaluate_NN:
 
         data: the dataset to evaluate trained model on
         '''
-        scaled_data = self.scaler[ensemble_index].transform(data)
+        scaled_data = self.scaler[ensemble_index].transform(data[self.features])
         pred = self.model_NN[ensemble_index].predict(scaled_data, 
                                                      verbose=2, 
                                                      batch_size=10_000)
@@ -640,10 +640,10 @@ class TrainEvaluate_NN:
         Test if \int p_A/p_B x p_B ~ 1
         '''
         # Normalized reference (denominator) hypothesis
-        weight_ref = self.weights[self.train_labels==0].copy()
+        weight_ref = self.weights[self.training_labels==0].copy()
 
         # Calculate p_A/p_B for B hypothesis events
-        score_rwt = self.predict_with_model(self.dataset[self.features], use_log_loss=self.use_log_loss)[self.train_labels==0]
+        score_rwt = self.predict_with_model(self.dataset[self.features], use_log_loss=self.use_log_loss)[self.training_labels==0]
         ratio_rwt = score_rwt/(1.0-score_rwt)
 
         # Calculate \sum p_A/p_B x p_B
