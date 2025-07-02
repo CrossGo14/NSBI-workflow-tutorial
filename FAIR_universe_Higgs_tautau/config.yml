@@ -89,22 +89,22 @@ process_index :
         - 2
 
 
-# Systematics to use for the analysis model
-dict_systs:
-  TES:
-    process:
-      - htautau
-      - ttbar
-      - ztautau
-    directions:
-      - up
-      - dn
+# # Systematics to use for the analysis model
+# dict_systs:
+#   TES:
+#     process:
+#       - htautau
+#       - ttbar
+#       - ztautau
+#     directions:
+#       - up
+#       - dn
 
-  JES:
-    process:
-      - htautau
-      - ttbar
-      - ztautau
-    directions:
-      - up
-      - dn
+#   JES:
+#     process:
+#       - htautau
+#       - ttbar
+#       - ztautau
+#     directions:
+#       - up
+#       - dn
