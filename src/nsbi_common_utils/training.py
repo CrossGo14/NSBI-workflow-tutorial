@@ -267,13 +267,13 @@ class TrainEvaluate_NN:
                         callback_factor,
                         activation, 
                         verbose,
-                        rnd_seed = random_state_arr[ensemble_index], 
-                        ensemble_index, 
-                        validation_split, 
-                        holdout_split, 
-                        plot_scaled_features, 
-                        load_trained_models,
-                        recalibrate_output)
+                        rnd_seed                = random_state_arr[ensemble_index], 
+                        ensemble_index          = ensemble_index, 
+                        validation_split        = validation_split, 
+                        holdout_split           = holdout_split, 
+                        plot_scaled_features    = plot_scaled_features, 
+                        load_trained_models     = load_trained_models,
+                        recalibrate_output      = recalibrate_output)
         
     def train(self, hidden_layers, 
                     neurons, 
@@ -309,14 +309,14 @@ class TrainEvaluate_NN:
         '''
 
         if ensemble_index=='':
-            self.model_NN           = []
-            self.scaler             = []
-            self.full_data_prediction     = []
+            self.model_NN           = [None]
+            self.scaler             = [None]
 
             self.full_data_prediction = np.zeros((1, len(self.weights)))
-            self.train_idx          = []
-            self.holdout_idx        = []
+            self.train_idx          = [None]
+            self.holdout_idx        = [None]
             self.num_ensemble_members = 1
+            ensemble_index = 0
 
         self.calibration = calibration
         self.calibration_switch = False # Set the switch to false for first evaluation for calibration
@@ -433,7 +433,7 @@ class TrainEvaluate_NN:
             np.save(f"{self.path_to_models}num_events_random_state_train_holdout_split{ensemble_index}.npy", 
                     np.array([holdout_num, rnd_seed]))
     
-            dump(self.scaler, saved_scaler, compress=True)
+            dump(self.scaler[ensemble_index], saved_scaler, compress=True)
     
             plot_loss(self.history, path_to_figures=self.path_to_figures)
 
@@ -512,7 +512,7 @@ class TrainEvaluate_NN:
 
 
 
-    def get_trained_model(self, path_to_models ensemble_index=''):
+    def get_trained_model(self, path_to_models, ensemble_index=''):
         '''
         Method to load the trained model
 
@@ -572,8 +572,8 @@ class TrainEvaluate_NN:
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
         from nsbi_common_utils.plotting import plot_overfit
 
-        plot_overfit(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels==0], 
-                     self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels==0], 
+        plot_overfit(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                     self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
                      self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
                      self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
                     nbins=30, 
@@ -582,8 +582,8 @@ class TrainEvaluate_NN:
                     label=f'{self.sample_name[1]}', 
                     path_to_figures=self.path_to_figures)
         
-        plot_overfit(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels==1], 
-                     self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels==1], 
+        plot_overfit(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
+                     self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
                      self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
                      self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
                     nbins=30, 
@@ -656,7 +656,7 @@ class TrainEvaluate_NN:
                         path_to_figures=self.path_to_figures, label='Training Data Diagnostic')
 
         plot_reweighted(self.dataset.iloc[self.holdout_idx[ensemble_index]].copy(), 
-                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
                         self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0],
                         self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
                         self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1],
@@ -687,7 +687,7 @@ class TrainEvaluate_NN:
         score_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
         ratio_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
 
-        for ensemble_index in self.num_ensemble_members:
+        for ensemble_index in range(self.num_ensemble_members):
             score_pred[ensemble_index] = self.predict_with_model(dataset[self.features], 
                                                                  use_log_loss=self.use_log_loss, 
                                                                  ensemble_index=ensemble_index)
