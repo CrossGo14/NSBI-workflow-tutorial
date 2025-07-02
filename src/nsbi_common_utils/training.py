@@ -1,5 +1,5 @@
 #import libraries
-import os, importlib,sys
+import os, importlib, sys, shutil
 import numpy as np
 import pandas as pd
 import math
@@ -178,7 +178,8 @@ class TrainEvaluate_NN:
                       path_to_models='', 
                       path_to_ratios='',
                       use_log_loss=False, 
-                      split_using_fold=False):
+                      split_using_fold=False,
+                      delete_existing_models=False):
         '''
         dataset: the main dataframe containing two classes p_A, p_B for density ratio p_A/p_B estimation
         weights: the weight vector, normalized independently for each class A & B
@@ -203,9 +204,16 @@ class TrainEvaluate_NN:
         self.scaler = [None]
         
         self.path_to_figures = path_to_figures
+
+        if delete_existing_models:
+            shutil.rmtree(path_to_figures)
+            shutil.rmtree(path_to_models)
+            shutil.rmtree(path_to_ratios)
+
+
         if not os.path.exists(path_to_figures):
                 os.makedirs(path_to_figures)
-            
+        
         self.path_to_models = path_to_models
         if not os.path.exists(path_to_models):
                 os.makedirs(path_to_models)
@@ -215,28 +223,28 @@ class TrainEvaluate_NN:
                 os.makedirs(path_to_ratios)
         
     def train_ensemble(self, hidden_layers, 
-                    neurons, 
-                    number_of_epochs, 
-                    batch_size,
-                    learning_rate, 
-                    scalerType, 
-                    calibration=False, 
-                    num_bins_cal = 40, 
-                    callback = True, 
-                    callback_patience=30, 
-                    callback_factor=0.01,
-                    activation='swish', 
-                    verbose=2, 
-                    validation_split=0.1, 
-                    holdout_split=0.3, 
-                    plot_scaled_features=False, 
-                    load_trained_models = False,
-                    recalibrate_output=False,
-                    num_ensemble_members=1):
+                            neurons, 
+                            number_of_epochs, 
+                            batch_size,
+                            learning_rate, 
+                            scalerType, 
+                            calibration=False, 
+                            num_bins_cal = 40, 
+                            callback = True, 
+                            callback_patience=30, 
+                            callback_factor=0.01,
+                            activation='swish', 
+                            verbose=2, 
+                            validation_split=0.1, 
+                            holdout_split=0.3, 
+                            plot_scaled_features=False, 
+                            load_trained_models = False,
+                            recalibrate_output=False,
+                            num_ensemble_members=1):
         '''
         Train an ensemble of NNs
         '''
-
+        print(f"starting ensemble training")
         self.num_ensemble_members = num_ensemble_members
         
         # Define an array with random integers for boostrap training
@@ -252,6 +260,16 @@ class TrainEvaluate_NN:
 
         # Train ensemble of NNs in series
         for ensemble_index in range(num_ensemble_members):
+
+            if load_trained_models:
+                if os.path.exists(f"{self.path_to_models}/model_weights{ensemble_index}.weights.h5"):
+                    print(f"Loading existing model for ensemble member {ensemble_index}")
+                    load_trained_models_ensemble_member = True
+                else:
+                    load_trained_models_ensemble_member = False
+
+            else:
+                load_trained_models_ensemble_member = False
             
             # Train ensemble NNs with different train/test split each time (bootstrapping without replacement)
             self.train(hidden_layers, 
@@ -272,7 +290,7 @@ class TrainEvaluate_NN:
                         validation_split        = validation_split, 
                         holdout_split           = holdout_split, 
                         plot_scaled_features    = plot_scaled_features, 
-                        load_trained_models     = load_trained_models,
+                        load_trained_models     = load_trained_models_ensemble_member,
                         recalibrate_output      = recalibrate_output)
         
     def train(self, hidden_layers, 
@@ -694,6 +712,7 @@ class TrainEvaluate_NN:
             ratio_pred[ensemble_index] = score_pred[ensemble_index] / (1.0 - score_pred[ensemble_index])
 
         ratio_ensemble = np.mean(ratio_pred, axis=0)
+        print(ratio_ensemble.shape)
 
         np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio_ensemble)
 
