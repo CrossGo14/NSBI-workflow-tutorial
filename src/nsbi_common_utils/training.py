@@ -492,14 +492,14 @@ class TrainEvaluate_NN:
         
         # Some diagnostics to ensure numerical stability - min/max must not be exactly 0 or 1
         min_max_values = [
-            (self.sample_name[1], "training", np.amin(self.full_data_prediction[ensemble_index][self.train_idx][self.training_labels==0]), 
-                                              np.amax(self.full_data_prediction[ensemble_index][self.train_idx][self.training_labels==0])),
-            (self.sample_name[0], "training", np.amin(self.full_data_prediction[ensemble_index][self.train_idx][self.training_labels==1]), 
-                                              np.amax(self.full_data_prediction[ensemble_index][self.train_idx][self.training_labels==1])),
-            (self.sample_name[1], "holdout", np.amin(self.full_data_prediction[ensemble_index][self.holdout_idx][self.training_labels==0]), 
-                                              np.amax(self.full_data_prediction[ensemble_index][self.holdout_idx][self.training_labels==0])),
-            (self.sample_name[0], "holdout", np.amin(self.full_data_prediction[ensemble_index][self.holdout_idx][self.training_labels==1]), 
-                                              np.amax(self.full_data_prediction[ensemble_index][self.holdout_idx][self.training_labels==1]))
+            (self.sample_name[1], "training", np.amin(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0]), 
+                                              np.amax(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0])),
+            (self.sample_name[0], "training", np.amin(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1]), 
+                                              np.amax(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1])),
+            (self.sample_name[1], "holdout", np.amin(self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0]), 
+                                              np.amax(self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0])),
+            (self.sample_name[0], "holdout", np.amin(self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1]), 
+                                              np.amax(self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1]))
         ]
         
         for name, training_holdout_label, min_val, max_val in min_max_values:
@@ -564,7 +564,7 @@ class TrainEvaluate_NN:
         return pred
         
 
-    def make_overfit_plots(self):
+    def make_overfit_plots(self, ensemble_index=0):
         '''
         Plot predictions for training and holdout to test compatibility
         '''
@@ -572,16 +572,28 @@ class TrainEvaluate_NN:
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
         from nsbi_common_utils.plotting import plot_overfit
 
-        plot_overfit(self.label_0_tpred, self.label_0_hpred, self.w_train_label_0, self.w_holdout_label_0, 
-                    nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
-                    label=f'{self.sample_name[1]}', path_to_figures=self.path_to_figures)
+        plot_overfit(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels==0], 
+                     self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels==0], 
+                     self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                     self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
+                    nbins=30, 
+                    plotRange=[0.0,1.0], 
+                    holdout_index=0, 
+                    label=f'{self.sample_name[1]}', 
+                    path_to_figures=self.path_to_figures)
         
-        plot_overfit(self.label_1_tpred, self.label_1_hpred, self.w_train_label_1, self.w_holdout_label_1, 
-                    nbins=30, plotRange=[0.0,1.0], holdout_index=0, 
-                    label=f'{self.sample_name[0]}', path_to_figures=self.path_to_figures)
+        plot_overfit(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels==1], 
+                     self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels==1], 
+                     self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
+                     self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
+                    nbins=30, 
+                    plotRange=[0.0,1.0], 
+                    holdout_index=0, 
+                    label=f'{self.sample_name[0]}', 
+                    path_to_figures=self.path_to_figures)
 
 
-    def make_calib_plots(self, observable='score', nbins=10):
+    def make_calib_plots(self, observable='score', nbins=10, ensemble_index=0):
         '''
         Test the probability calibration of NN output
 
@@ -592,27 +604,37 @@ class TrainEvaluate_NN:
 
         if observable=='score':
             # Plot Calibration curves - score function
-            plot_calibration_curve(self.label_0_tpred, self.w_train_label_0, 
-                                   self.label_1_tpred, self.w_train_label_1, 
-                                   self.label_0_hpred, self.w_holdout_label_0, 
-                                   self.label_1_hpred, self.w_holdout_label_1, 
-                                   self.path_to_figures, nbins=nbins, 
+            plot_calibration_curve(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                                   self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                                   self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
+                                   self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
+                                   self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
+                                   self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
+                                   self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
+                                   self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
+                                   self.path_to_figures, 
+                                   nbins=nbins, 
                                    label="Calibration Curve - "+str(self.sample_name[0]))
 
         elif observable=='llr':
             # Plot Calibration curves - nll function
-            plot_calibration_curve_ratio(self.label_0_tpred, self.w_train_label_0, 
-                                         self.label_1_tpred, self.w_train_label_1, 
-                                         self.label_0_hpred, self.w_holdout_label_0, 
-                                         self.label_1_hpred, self.w_holdout_label_1, 
-                                         self.path_to_figures, nbins=nbins, 
-                                         label="Calibration Curve - "+str(self.sample_name[0]))
+            plot_calibration_curve_ratio(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                                        self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                                        self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
+                                        self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
+                                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
+                                        self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
+                                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
+                                        self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
+                                        self.path_to_figures, 
+                                        nbins=nbins, 
+                                        label="Calibration Curve - "+str(self.sample_name[0]))
 
         else:
             raise Exception("observable not recognized - choose between score and llr options")
 
 
-    def make_reweighted_plots(self, variables, scale, num_bins):
+    def make_reweighted_plots(self, variables, scale, num_bins, ensemble_index = 0):
         '''
         Test the quality of the NN predicted density ratios using a reweighting check p_A/p_B * p_B ~ p_A
 
@@ -623,15 +645,23 @@ class TrainEvaluate_NN:
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
         from nsbi_common_utils.plotting import plot_reweighted
 
-        plot_reweighted(self.train_data_eval, self.label_0_tpred, 
-                        self.w_train_label_0, self.label_1_tpred, self.w_train_label_1,
-                        variables=variables, num=num_bins,
+        plot_reweighted(self.dataset.iloc[self.train_idx[ensemble_index]].copy(), 
+                        self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                        self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                        self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
+                        self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1],
+                        variables=variables, 
+                        num=num_bins,
                         sample_name=self.sample_name, scale=scale,  
                         path_to_figures=self.path_to_figures, label='Training Data Diagnostic')
 
-        plot_reweighted(self.holdout_data_eval, self.label_0_hpred, 
-                        self.w_holdout_label_0,self.label_1_hpred, self.w_holdout_label_1,
-                        variables=variables, num=num_bins,
+        plot_reweighted(self.dataset.iloc[self.holdout_idx[ensemble_index]].copy(), 
+                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
+                        self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0],
+                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
+                        self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1],
+                        variables=variables, 
+                        num=num_bins,
                         sample_name=self.sample_name, scale=scale, 
                         path_to_figures=self.path_to_figures, label='Holdout Data Diagnostic')
 
