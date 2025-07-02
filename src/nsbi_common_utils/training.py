@@ -197,6 +197,10 @@ class TrainEvaluate_NN:
         self.output_name = output_name
         self.use_log_loss = use_log_loss
         self.split_using_fold = split_using_fold
+
+        # Initialize a list of models to train - if no ensemble, this is a 1 member list
+        self.model_NN = [None]
+        self.scaler = [None]
         
         self.path_to_figures = path_to_figures
         if not os.path.exists(path_to_figures):
@@ -229,9 +233,14 @@ class TrainEvaluate_NN:
                     load_trained_models = False,
                     recalibrate_output=False,
                     num_ensemble_members=1):
-        
+        '''
+        Train an ensemble of NNs
+        '''
         # Define an array with random integers for boostrap training
         random_state_arr = np.random.randint(0, 2**32 -1, size=num_ensemble_members)
+
+        self.model_NN = [None for i in range(num_ensemble_members)]
+        self.scaler = [None for i in range(num_ensemble_members)]
 
         # Train ensemble of NNs in series
         for ensemble_index in range(num_ensemble_members):
@@ -323,28 +332,28 @@ class TrainEvaluate_NN:
         if load_trained_models:
 
             print(f"Reading saved models from {self.path_to_models}")
-            self.scaler, self.model_NN = self.get_trained_model(self.path_to_models, 
-                                                                ensemble_index=member_index)
+            self.scaler[ensemble_index], self.model_NN[ensemble_index] = self.get_trained_model(self.path_to_models, 
+                                                                                                ensemble_index=ensemble_index)
 
         else:
 
             if (scalerType == 'MinMax'):
-                self.scaler = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.features_scaling)],remainder='passthrough')
+                self.scaler[ensemble_index] = ColumnTransformer([("scaler",MinMaxScaler(feature_range=(-1.5,1.5)), self.features_scaling)],remainder='passthrough')
                 
             if (scalerType == 'StandardScaler'):
-                self.scaler = ColumnTransformer([("scaler",StandardScaler(), self.features_scaling)],remainder='passthrough')
+                self.scaler[ensemble_index] = ColumnTransformer([("scaler",StandardScaler(), self.features_scaling)],remainder='passthrough')
                 
             if (scalerType == 'PowerTransform_Yeo'):
-                self.scaler = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.features_scaling)],remainder='passthrough')
+                self.scaler[ensemble_index] = ColumnTransformer([("scaler",PowerTransformer(method='yeo-johnson', standardize=True), self.features_scaling)],remainder='passthrough')
 
 
-        scaled_data_train = self.scaler.fit_transform(data_train)
+        scaled_data_train = self.scaler[ensemble_index].fit_transform(data_train)
         scaled_data_train= pd.DataFrame(scaled_data_train, columns=self.features)
 
         if plot_scaled_features:
             plot_all_features(scaled_data_train, weight_train, label_train)
 
-        scaled_data_holdout = self.scaler.transform(data_holdout)
+        scaled_data_holdout = self.scaler[ensemble_index].transform(data_holdout)
         scaled_data_holdout = pd.DataFrame(scaled_data_holdout, columns=self.features)
 
         if not load_trained_models:
@@ -355,19 +364,19 @@ class TrainEvaluate_NN:
     
             print(f"Using {activation} activation function")
     
-            self.model_NN = build_model(n_hidden=hidden_layers, n_neurons=neurons, 
+            self.model_NN[ensemble_index] = build_model(n_hidden=hidden_layers, n_neurons=neurons, 
                                         learning_rate=learning_rate, 
                                         input_shape=[len(self.features)], 
                                         use_log_loss=self.use_log_loss,
                                         activation=activation)
     
-            self.model_NN.summary()
+            self.model_NN[ensemble_index].summary()
     
             if callback:
     
                 print("Using Callbacks")
     
-                self.history = self.model_NN.fit(scaled_data_train, label_train, callbacks=[reduce_lr, es], 
+                self.history = self.model_NN[ensemble_index].fit(scaled_data_train, label_train, callbacks=[reduce_lr, es], 
                                                     epochs=number_of_epochs, batch_size=batch_size, 
                                                     validation_split=validation_split, sample_weight=weight_train, 
                                                     verbose=verbose)
@@ -375,7 +384,7 @@ class TrainEvaluate_NN:
             else:
                 print("Not Using Callbacks")
     
-                self.history = self.model_NN.fit(scaled_data_train, label_train, 
+                self.history = self.model_NN[ensemble_index].fit(scaled_data_train, label_train, 
                                                     epochs=number_of_epochs, batch_size=batch_size, 
                                                     validation_split=validation_split, sample_weight=weight_train, 
                                                     verbose=verbose)
@@ -387,12 +396,12 @@ class TrainEvaluate_NN:
             saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
             print(saved_scaler)
     
-            model_json = self.model_NN.to_json()
+            model_json = self.model_NN[ensemble_index].to_json()
             with open(f"{self.path_to_models}model_arch{ensemble_index}.json", "w") as json_file:
                 json_file.write(model_json)
     
             # serialize weights to HDF5
-            self.model_NN.save_weights(f"{self.path_to_models}model_weights{ensemble_index}.weights.h5")
+            self.model_NN[ensemble_index].save_weights(f"{self.path_to_models}model_weights{ensemble_index}.weights.h5")
     
             np.save(f"{self.path_to_models}num_events_random_state_train_holdout_split{ensemble_index}.npy", 
                     np.array([holdout_num, rnd_seed]))
@@ -414,7 +423,8 @@ class TrainEvaluate_NN:
                                                                             random_state=rnd_seed,                                                                            stratify=self.train_labels)
         
         # Do a first prediction without calibration layers
-        train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
+        train_data_prediction = self.predict_with_model(self.train_data_eval, ensemble_index = ensemble_index, 
+                                                        use_log_loss = self.use_log_loss)
 
         # If calibrating, use the train_data_prediction for building histogram
         if self.calibration:
@@ -453,12 +463,18 @@ class TrainEvaluate_NN:
                     file_calib = open(path_to_calibrated_object, 'rb') 
                     self.histogram_calibrator = pickle.load(file_calib)
                     
-            train_data_prediction = self.predict_with_model(self.train_data_eval, use_log_loss=self.use_log_loss)
-            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
+            train_data_prediction = self.predict_with_model(self.train_data_eval, 
+                                                            ensemble_index = ensemble_index, 
+                                                            use_log_loss=self.use_log_loss)
+            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, 
+                                                              ensemble_index = ensemble_index, 
+                                                              use_log_loss=self.use_log_loss)
 
         # Else, continue evaluating using the base model
         else:
-            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, use_log_loss=self.use_log_loss)
+            holdout_data_prediction = self.predict_with_model(self.holdout_data_eval, 
+                                                              ensemble_index = ensemble_index, 
+                                                              use_log_loss=self.use_log_loss)
 
         # Prediction arrays for holdout subset of data: label_0 for p_B hypothesis and label_1 for p_A hypothesis in p_A/p_B
         self.label_0_hpred = holdout_data_prediction[label_holdout==0].copy()
@@ -490,7 +506,7 @@ class TrainEvaluate_NN:
             if min_val == 0:
                 print(f"WARNING: {name} {dataset} data has min score = 0, which may indicate numerical instability!")
             
-            if min_val == 0:
+            if max_val == 1:
                 print(f"WARNING: {name} {dataset} data has max score = 1, which may indicate numerical instability!")            
 
 
@@ -521,14 +537,16 @@ class TrainEvaluate_NN:
         return scaler, model
 
     
-    def predict_with_model(self, data, use_log_loss=False):
+    def predict_with_model(self, data, ensemble_index = 0, use_log_loss=False):
         '''
         Method that evaluates density ratios on provided dataset, using self.model
 
         data: the dataset to evaluate trained model on
         '''
-        scaled_data = self.scaler.transform(data)
-        pred = self.model_NN.predict(scaled_data, verbose=2, batch_size=10000)
+        scaled_data = self.scaler[ensemble_index].transform(data)
+        pred = self.model_NN[ensemble_index].predict(scaled_data, 
+                                                     verbose=2, 
+                                                     batch_size=10_000)
         pred = pred.reshape(pred.shape[0],)
 
         if use_log_loss:
@@ -537,7 +555,7 @@ class TrainEvaluate_NN:
 
         if (self.calibration) & (self.calibration_switch):
 
-            pred = self.histogram_calibrator.cali_pred(pred)
+            pred = self.histogram_calibrator[ensemble_index].cali_pred(pred)
             pred = pred.reshape(pred.shape[0],)
             pred = np.clip(pred, 1e-25, 0.999999)
 
