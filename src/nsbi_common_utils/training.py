@@ -684,11 +684,18 @@ class TrainEvaluate_NN:
         '''
         Evaluate with self.model on the input dataset, and save to self.path_to_ratios
         '''
-        score_pred = self.predict_with_model(dataset[self.features], use_log_loss=self.use_log_loss)
+        score_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
+        ratio_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
 
-        ratio = score_pred / (1.0-score_pred)
+        for ensemble_index in self.num_ensemble_members:
+            score_pred[ensemble_index] = self.predict_with_model(dataset[self.features], 
+                                                                 use_log_loss=self.use_log_loss, 
+                                                                 ensemble_index=ensemble_index)
+            ratio_pred[ensemble_index] = score_pred[ensemble_index] / (1.0 - score_pred[ensemble_index])
 
-        np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio)
+        ratio_ensemble = np.mean(ratio_pred, axis=0)
+
+        np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio_ensemble)
 
 def build_model(n_hidden=4, 
                 n_neurons=1000, 
