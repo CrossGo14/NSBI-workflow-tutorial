@@ -50,9 +50,11 @@ background_processes : ["ttbar", "ztautau"]
 
 # choice of reference hypothesis
 ref_processes : ["htautau"] 
+# ref_processes : ["htautau", "ttbar"] 
 
 # mix_model_hypotheses = signal_processes + background_processes for which density ratios need to be estimated
 mix_model_hypotheses : ["ttbar", "ztautau"]
+# mix_model_hypotheses : ["htautau", "ttbar", "ztautau"]
 
 
 # Assign an integer with each of the processes 

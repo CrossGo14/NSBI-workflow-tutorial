@@ -683,7 +683,7 @@ class TrainEvaluate_NN:
                         sample_name=self.sample_name, scale=scale, 
                         path_to_figures=self.path_to_figures, label='Holdout Data Diagnostic')
 
-    def test_normalization(self):
+    def test_normalization(self, ensemble_index = 0):
         '''
         Test if \int p_A/p_B x p_B ~ 1
         '''
@@ -691,28 +691,47 @@ class TrainEvaluate_NN:
         weight_ref = self.weights[self.training_labels==0].copy()
 
         # Calculate p_A/p_B for B hypothesis events
-        score_rwt = self.predict_with_model(self.dataset[self.features], use_log_loss=self.use_log_loss)[self.training_labels==0]
+        score_rwt = self.predict_with_model(self.dataset[self.features], ensemble_index=ensemble_index, use_log_loss=self.use_log_loss)[self.training_labels==0]
         ratio_rwt = score_rwt/(1.0-score_rwt)
 
         # Calculate \sum p_A/p_B x p_B
         print(f"The sum of PDFs is {np.sum(ratio_rwt * weight_ref)}")
 
 
-    def evaluate_and_save_ratios(self, dataset):
+    def evaluate_and_save_ratios(self, dataset, aggregation_type = 'mean_ratio'):
         '''
         Evaluate with self.model on the input dataset, and save to self.path_to_ratios
+
+        aggregation_type: choose an option on how to aggregate the ensemble models - 'median_ratio', 'mean_ratio', 'median_score', 'mean_score'
         '''
         score_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
         ratio_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
+        log_ratio_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
 
         for ensemble_index in range(self.num_ensemble_members):
             score_pred[ensemble_index] = self.predict_with_model(dataset[self.features], 
                                                                  use_log_loss=self.use_log_loss, 
                                                                  ensemble_index=ensemble_index)
+            
             ratio_pred[ensemble_index] = score_pred[ensemble_index] / (1.0 - score_pred[ensemble_index])
+            log_ratio_pred[ensemble_index] = np.log(score_pred[ensemble_index] / (1.0 - score_pred[ensemble_index]))
 
-        ratio_ensemble = np.mean(ratio_pred, axis=0)
-        print(ratio_ensemble.shape)
+        if aggregation_type == 'median_ratio':
+            ratio_ensemble = np.median(ratio_pred, axis=0)
+            
+        elif aggregation_type == 'mean_ratio':
+            ratio_ensemble = np.mean(ratio_pred, axis=0)
+            
+        elif aggregation_type == 'median_score':
+            score_aggregate = np.median(score_pred, axis=0)
+            ratio_ensemble = score_aggregate / (1.0 - score_aggregate)
+            
+        elif aggregation_type == 'mean_score':
+            score_aggregate = np.mean(score_pred, axis=0)
+            ratio_ensemble = score_aggregate / (1.0 - score_aggregate)
+
+        else:
+            raise Exception("aggregation_type not recognized, please choose between median_ratio, mean_ratio, median_score or mean_score")
 
         np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio_ensemble)
 
