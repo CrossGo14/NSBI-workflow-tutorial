@@ -206,9 +206,14 @@ class TrainEvaluate_NN:
         self.path_to_figures = path_to_figures
 
         if delete_existing_models:
-            shutil.rmtree(path_to_figures)
-            shutil.rmtree(path_to_models)
-            shutil.rmtree(path_to_ratios)
+            if os.path.exists(path_to_figures):
+                shutil.rmtree(path_to_figures)
+            
+            if os.path.exists(path_to_models):
+                shutil.rmtree(path_to_models)
+                
+            if os.path.exists(path_to_ratios):
+                shutil.rmtree(path_to_ratios)
 
 
         if not os.path.exists(path_to_figures):
@@ -251,6 +256,7 @@ class TrainEvaluate_NN:
         random_state_arr = np.random.randint(0, 2**32 -1, size=num_ensemble_members)
 
         self.model_NN           = [None for i in range(num_ensemble_members)]
+        self.histogram_calibrator = [None for i in range(num_ensemble_members)]
         self.scaler             = [None for i in range(num_ensemble_members)]
         self.full_data_prediction     = [None for i in range(num_ensemble_members)]
 
@@ -326,18 +332,20 @@ class TrainEvaluate_NN:
         num_bins_cal: number of bins used for calibration histogram
         '''
 
-        if ensemble_index=='':
-            self.model_NN           = [None]
-            self.scaler             = [None]
-
-            self.full_data_prediction = np.zeros((1, len(self.weights)))
-            self.train_idx          = [None]
-            self.holdout_idx        = [None]
-            self.num_ensemble_members = 1
-            ensemble_index = 0
-
         self.calibration = calibration
         self.calibration_switch = False # Set the switch to false for first evaluation for calibration
+
+        if ensemble_index=='':
+            self.model_NN              = [None]
+            self.scaler                = [None]
+            self.histogram_calibrator  = [None]
+
+            self.full_data_prediction  = np.zeros((1, len(self.weights)))
+            self.train_idx             = [None]
+            self.holdout_idx           = [None]
+            self.num_ensemble_members  = 1
+            ensemble_index             = 0
+
         
         if load_trained_models:
             # Load the number of holdout events and random state used for train/test split when using saved models
@@ -422,17 +430,17 @@ class TrainEvaluate_NN:
                 print("Using Callbacks")
     
                 self.history = self.model_NN[ensemble_index].fit(scaled_data_train, label_train, callbacks=[reduce_lr, es], 
-                                                    epochs=number_of_epochs, batch_size=batch_size, 
-                                                    validation_split=validation_split, sample_weight=weight_train, 
-                                                    verbose=verbose)
+                                                                epochs=number_of_epochs, batch_size=batch_size, 
+                                                                validation_split=validation_split, sample_weight=weight_train, 
+                                                                verbose=verbose)
     
             else:
                 print("Not Using Callbacks")
     
                 self.history = self.model_NN[ensemble_index].fit(scaled_data_train, label_train, 
-                                                    epochs=number_of_epochs, batch_size=batch_size, 
-                                                    validation_split=validation_split, sample_weight=weight_train, 
-                                                    verbose=verbose)
+                                                                epochs=number_of_epochs, batch_size=batch_size, 
+                                                                validation_split=validation_split, sample_weight=weight_train, 
+                                                                verbose=verbose)
             
             K.clear_session()
         
@@ -466,15 +474,15 @@ class TrainEvaluate_NN:
             self.calibration_switch = True
             path_to_calibrated_object = f"{self.path_to_models}model_calibrated_hist{ensemble_index}.obj"
 
-            calibration_data_num = train_data_prediction[self.train_labels_eval==1]
-            calibration_data_den = train_data_prediction[self.train_labels_eval==0]
+            calibration_data_num = train_data_prediction[label_train==1]
+            calibration_data_den = train_data_prediction[label_train==0]
 
-            w_num = self.train_weights_eval[self.train_labels_eval==1]
-            w_den = self.train_weights_eval[self.train_labels_eval==0]
+            w_num = weight_train[label_train==1]
+            w_den = weight_train[label_train==0]
 
             if not load_trained_models:
             
-                self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
+                self.histogram_calibrator[ensemble_index] =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
                                                                  nbins=num_bins_cal, method='direct', mode='dynamic')
     
                 file_calib = open(path_to_calibrated_object, 'wb') 
@@ -683,20 +691,28 @@ class TrainEvaluate_NN:
                         sample_name=self.sample_name, scale=scale, 
                         path_to_figures=self.path_to_figures, label='Holdout Data Diagnostic')
 
-    def test_normalization(self, ensemble_index = 0):
+    def test_normalization(self):
         '''
         Test if \int p_A/p_B x p_B ~ 1
         '''
         # Normalized reference (denominator) hypothesis
         weight_ref = self.weights[self.training_labels==0].copy()
 
-        # Calculate p_A/p_B for B hypothesis events
-        score_rwt = self.predict_with_model(self.dataset[self.features], ensemble_index=ensemble_index, use_log_loss=self.use_log_loss)[self.training_labels==0]
-        ratio_rwt = score_rwt/(1.0-score_rwt)
+        ratio_rwt = np.zeros((self.num_ensemble_members, weight_ref.shape[0]))
 
-        # Calculate \sum p_A/p_B x p_B
-        print(f"The sum of PDFs is {np.sum(ratio_rwt * weight_ref)}")
+        for ensemble_index in range(self.num_ensemble_members):
+            
+            # Calculate p_A/p_B for B hypothesis events
+            score_rwt = self.predict_with_model(self.dataset[self.features], ensemble_index=ensemble_index, use_log_loss=self.use_log_loss)[self.training_labels==0]
+            ratio_rwt[ensemble_index] = score_rwt / ( 1.0 - score_rwt )
+    
+            # Calculate \sum p_A/p_B x p_B
+            print(f"\n\n\nThe sum of PDFs in ensemble member {ensemble_index} is {np.sum(ratio_rwt[ensemble_index] * weight_ref)}\n\n")
 
+        ratio_rwt_aggregate = np.mean(ratio_rwt, axis=0)
+        
+        print(f"The sum of PDFs using the whole ensemble is {np.sum(ratio_rwt_aggregate * weight_ref)}\n\n\n")
+        
 
     def evaluate_and_save_ratios(self, dataset, aggregation_type = 'mean_ratio'):
         '''
