@@ -496,16 +496,16 @@ class TrainEvaluate_NN:
                     
                     print(f"Calibrating the saved model with {num_bins_cal} bins")
                     
-                    self.histogram_calibrator =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
+                    self.histogram_calibrator[ensemble_index] =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
                                                                  nbins=num_bins_cal, method='direct', mode='dynamic')
     
                     file_calib = open(path_to_calibrated_object, 'wb') 
         
-                    pickle.dump(self.histogram_calibrator, file_calib)
+                    pickle.dump(self.histogram_calibrator[ensemble_index], file_calib)
                 else:
                 
                     file_calib = open(path_to_calibrated_object, 'rb') 
-                    self.histogram_calibrator = pickle.load(file_calib)
+                    self.histogram_calibrator[ensemble_index] = pickle.load(file_calib)
             
             self.full_data_prediction[ensemble_index] = self.predict_with_model(self.dataset, 
                                                                                 ensemble_index = ensemble_index, 
@@ -585,7 +585,7 @@ class TrainEvaluate_NN:
 
             pred = self.histogram_calibrator[ensemble_index].cali_pred(pred)
             pred = pred.reshape(pred.shape[0],)
-            pred = np.clip(pred, 1e-25, 0.999999)
+            pred = np.clip(pred, 1e-25, 0.9999999)
 
         K.clear_session()
             
