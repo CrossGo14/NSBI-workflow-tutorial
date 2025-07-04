@@ -290,7 +290,7 @@ class TrainEvaluate_NN:
                         callback_patience, 
                         callback_factor,
                         activation, 
-                        verbose,
+                        verbose                 = verbose,
                         rnd_seed                = random_state_arr[ensemble_index], 
                         ensemble_index          = ensemble_index, 
                         validation_split        = validation_split, 
@@ -334,6 +334,8 @@ class TrainEvaluate_NN:
 
         self.calibration = calibration
         self.calibration_switch = False # Set the switch to false for first evaluation for calibration
+
+        self.verbose = verbose
 
         if ensemble_index=='':
             self.model_NN              = [None]
@@ -422,8 +424,8 @@ class TrainEvaluate_NN:
                                         input_shape=[len(self.features)], 
                                         use_log_loss=self.use_log_loss,
                                         activation=activation)
-    
-            self.model_NN[ensemble_index].summary()
+            if self.verbose>0:
+                self.model_NN[ensemble_index].summary()
     
             if callback:
     
@@ -432,7 +434,7 @@ class TrainEvaluate_NN:
                 self.history = self.model_NN[ensemble_index].fit(scaled_data_train, label_train, callbacks=[reduce_lr, es], 
                                                                 epochs=number_of_epochs, batch_size=batch_size, 
                                                                 validation_split=validation_split, sample_weight=weight_train, 
-                                                                verbose=verbose)
+                                                                verbose=self.verbose)
     
             else:
                 print("Not Using Callbacks")
@@ -440,7 +442,7 @@ class TrainEvaluate_NN:
                 self.history = self.model_NN[ensemble_index].fit(scaled_data_train, label_train, 
                                                                 epochs=number_of_epochs, batch_size=batch_size, 
                                                                 validation_split=validation_split, sample_weight=weight_train, 
-                                                                verbose=verbose)
+                                                                verbose=self.verbose)
             
             K.clear_session()
         
@@ -571,7 +573,7 @@ class TrainEvaluate_NN:
         '''
         scaled_data = self.scaler[ensemble_index].transform(data[self.features])
         pred = self.model_NN[ensemble_index].predict(scaled_data, 
-                                                     verbose=2, 
+                                                     verbose=self.verbose, 
                                                      batch_size=10_000)
         pred = pred.reshape(pred.shape[0],)
 
@@ -720,6 +722,8 @@ class TrainEvaluate_NN:
 
         aggregation_type: choose an option on how to aggregate the ensemble models - 'median_ratio', 'mean_ratio', 'median_score', 'mean_score'
         '''
+
+        print(f"Evaluating density ratios")
         score_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
         ratio_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
         log_ratio_pred = np.ones((self.num_ensemble_members, dataset.shape[0]))
@@ -748,8 +752,10 @@ class TrainEvaluate_NN:
 
         else:
             raise Exception("aggregation_type not recognized, please choose between median_ratio, mean_ratio, median_score or mean_score")
-
+        
         np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio_ensemble)
+        print(f"Density ratios saved")
+        
 
 def build_model(n_hidden=4, 
                 n_neurons=1000, 

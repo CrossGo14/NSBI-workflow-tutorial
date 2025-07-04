@@ -7,29 +7,6 @@ path_saved_data: 'cached_data/'
 # Directory where pre-selection model is saved
 path_preselection_NN_model: 'preselection_saved_NN/'
 
-# # Features to use for training NNs
-# features : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_had_pt', 'PRI_had_eta',
-#        'PRI_had_phi', 'PRI_met', 'PRI_met_phi', 'DER_mass_transverse_met_lep',
-#        'DER_mass_vis', 'DER_pt_h', 'DER_deltar_had_lep', 'DER_pt_tot', 'DER_sum_pt',
-#        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality', 'PRI_jet_leading_pt', 'PRI_jet_leading_eta',
-#        'PRI_jet_leading_phi',
-#        'PRI_jet_all_pt', 'PRI_jet_subleading_pt',
-#        'PRI_jet_subleading_eta', 'PRI_jet_subleading_phi', 'DER_deltaeta_jet_jet', 'DER_mass_jet_jet',
-#        'DER_prodeta_jet_jet',
-#        'DER_lep_eta_centrality', 'jet1_mask', 'jet2_mask', 'njet_0', 'njet_1', 'njet_2']
-
-# # Features to standardize before training
-# features_scaling : ['PRI_lep_pt', 'PRI_lep_eta', 'PRI_lep_phi', 'PRI_had_pt', 'PRI_had_eta',
-#        'PRI_had_phi', 'PRI_met', 'PRI_met_phi', 'DER_mass_transverse_met_lep',
-#        'DER_mass_vis', 'DER_pt_h', 'DER_deltar_had_lep', 'DER_pt_tot', 'DER_sum_pt',
-#        'DER_pt_ratio_lep_had', 'DER_met_phi_centrality', 'PRI_jet_leading_pt', 'PRI_jet_leading_eta',
-#        'PRI_jet_leading_phi',
-#        'PRI_jet_all_pt', 'PRI_jet_subleading_pt',
-#        'PRI_jet_subleading_eta', 'PRI_jet_subleading_phi', 'DER_deltaeta_jet_jet', 'DER_mass_jet_jet',
-#        'DER_prodeta_jet_jet',
-#        'DER_lep_eta_centrality']
-
-
 # Features to use for training NNs
 features : ['DER_mass_transverse_met_lep',
        'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
@@ -90,22 +67,22 @@ process_index :
         - 2
 
 
-# # Systematics to use for the analysis model
-# dict_systs:
-#   TES:
-#     process:
-#       - htautau
-#       - ttbar
-#       - ztautau
-#     directions:
-#       - up
-#       - dn
+# Systematics to use for the analysis model
+dict_systs:
+  TES:
+    process:
+      - htautau
+      - ttbar
+      - ztautau
+    directions:
+      - up
+      - dn
 
-#   JES:
-#     process:
-#       - htautau
-#       - ttbar
-#       - ztautau
-#     directions:
-#       - up
-#       - dn
+  JES:
+    process:
+      - htautau
+      - ttbar
+      - ztautau
+    directions:
+      - up
+      - dn
