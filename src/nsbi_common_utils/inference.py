@@ -14,6 +14,74 @@ import pickle
 import matplotlib.pyplot as plt
 from iminuit import Minuit
 
+# poynomial interpolation, same as HistFactory
+@jax.jit
+def poly_interp(tuple_input):
+    
+    alpha, pow_up, pow_down = tuple_input
+    
+    logHi         = jnp.log(pow_up)
+    logLo         = jnp.log(pow_down)
+    pow_up_log    = jnp.multiply(pow_up, logHi)
+    pow_down_log  = -jnp.multiply(pow_down, logLo)
+    pow_up_log2   =  jnp.multiply(pow_up_log, logHi)
+    pow_down_log2 = -jnp.multiply(pow_down_log, logLo)
+
+    S0 = (pow_up + pow_down) / 2.0
+    A0 = (pow_up - pow_down) / 2.0
+    S1 = (pow_up_log  + pow_down_log) / 2.0
+    A1 = (pow_up_log  - pow_down_log) / 2.0
+    S2 = (pow_up_log2 + pow_down_log2) / 2.0
+    A2 = (pow_up_log2 - pow_down_log2) / 2.0
+
+    a1 = ( 15 * A0 -  7 * S1 + A2)      / 8.0
+    a2 = (-24 + 24 * S0 -  9 * A1 + S2) / 8.0
+    a3 = ( -5 * A0 +  5 * S1 - A2)      / 4.0
+    a4 = ( 12 - 12 * S0 +  7 * A1 - S2) / 4.0
+    a5 = (  3 * A0 -  3 * S1 + A2)      / 8.0
+    a6 = ( -8 +  8 * S0 -  5 * A1 + S2) / 8.0
+
+    return alpha * (a1 + alpha * ( a2 + alpha * ( a3 + alpha * ( a4 + alpha * ( a5 + alpha * a6 ) ) ) ) )
+
+# exponential function for extrapolation   
+@jax.jit
+def exp_interp(tuple_input):
+    
+    alpha, varUp, varDown = tuple_input
+
+    return jnp.where(alpha>1.0, (varUp)**alpha, (varDown)**(-alpha)) - 1.0
+
+# loop over systematic uncertainty variations to calculate net effect
+@jax.jit
+def calculate_combined_var(Nparam_vec, combined_var_up, combined_var_down):
+
+    def calculate_variations(carry, param_val):
+        
+        param, combined_var_up_NP, combined_var_down_NP = param_val
+        
+        combined_var_array_alpha = carry
+    
+        # Strategy 5 of RooFit:
+        combined_var_array_alpha += combined_var_array_alpha * jax.lax.cond(jnp.abs(param)<=1.0, 
+                                                                            poly_interp, 
+                                                                            exp_interp, 
+                                                                            (param, combined_var_up_NP, combined_var_down_NP))            
+        return combined_var_array_alpha, None
+
+    # Prepare loop_tuple for jax.lax.scan 
+    loop_tuple = (Nparam_vec, combined_var_up, combined_var_down)
+
+    # Loop over systematic variations to calculate net effect
+    combined_var_array, _ = jax.lax.scan(calculate_variations, jnp.ones_like(combined_var_up[0]), loop_tuple)
+
+    return combined_var_array
+
+# Compute the poisson likelihood ratio
+@jax.jit
+def pois_loglikelihood(data_hist, nu_hist):
+
+    return -2 * jnp.sum( data_hist * jnp.log(nu_hist) - nu_hist)
+
 class nsbi_inference:
 
     def __init__(self, channels_binned, channels_unbinned, asimov_param_vec, num_unconstrained_params, 
@@ -35,100 +103,16 @@ class nsbi_inference:
         self.hist_channel_variations        = hist_channel_variations
         self.list_params_all                = list_params_all
         self.ratio_variations               = ratio_variations
-
-        # Inputs for vectorized calculation
-        # convert process lists into integer indices
-        self._fp_idx = jnp.array([self.process_index[p][0] for p in self.floating_processes])
-        self._fi_idx = jnp.array([self.process_index[p][0] for p in self.fixed_processes])
-
-
-    # poynomial interpolation, same as HistFactory
-    def poly_interp(self, tuple_input):
         
-        alpha, pow_up, pow_down = tuple_input
-        
-        logHi         = jnp.log(pow_up)
-        logLo         = jnp.log(pow_down)
-        pow_up_log    = jnp.multiply(pow_up, logHi)
-        pow_down_log  = -jnp.multiply(pow_down, logLo)
-        pow_up_log2   =  jnp.multiply(pow_up_log, logHi)
-        pow_down_log2 = -jnp.multiply(pow_down_log, logLo)
+        if self.num_unconstrained_params == len(self.list_params_all):
 
-        S0 = (pow_up + pow_down)/2.0
-        A0 = (pow_up - pow_down)/2.0
-        S1 = (pow_up_log  + pow_down_log)/2.0
-        A1 = (pow_up_log  - pow_down_log)/2.0
-        S2 = (pow_up_log2 + pow_down_log2)/2.0
-        A2 = (pow_up_log2 - pow_down_log2)/2.0
+            self.jitted_NLL_function = jax.jit(self.full_nll_function_noConst)
+            self.grad_jitted_NLL_function = jax.jit(jax.grad(self.jitted_NLL_function))
 
-        a1 = ( 15 * A0 -  7 * S1 + A2)      / 8.0
-        a2 = (-24 + 24 * S0 -  9 * A1 + S2) / 8.0
-        a3 = ( -5 * A0 +  5 * S1 - A2)      / 4.0
-        a4 = ( 12 - 12 * S0 +  7 * A1 - S2) / 4.0
-        a5 = (  3 * A0 -  3 * S1 + A2)      / 8.0
-        a6 = ( -8 +  8 * S0 -  5 * A1 + S2) / 8.0
-
-        return alpha * (a1 + alpha * ( a2 + alpha * ( a3 + alpha * ( a4 + alpha * ( a5 + alpha * a6 ) ) ) ) )
-
-    # exponential function for extrapolation    
-    def exp_interp(self, tuple_input):
-        
-        alpha, varUp, varDown = tuple_input
-
-        return jnp.where(alpha>1.0, (varUp)**alpha, (varDown)**(-alpha)) - 1.0
-
-    # loop over systematic uncertainty variations to calculate net effect
-    def calculate_combined_var(self, Nparam_vec, combined_var_up, combined_var_down):
-
-        def calculate_variations(carry, param_val):
-            
-            param, combined_var_up_NP, combined_var_down_NP = param_val
-            
-            combined_var_array_alpha = carry
-        
-            # Strategy 5 of RooFit:
-            combined_var_array_alpha += combined_var_array_alpha * jax.lax.cond(jnp.abs(param)<=1.0, 
-                                                                                self.poly_interp, 
-                                                                                self.exp_interp, 
-                                                                                (param, combined_var_up_NP, combined_var_down_NP))            
-            return combined_var_array_alpha, None
-
-        # Prepare loop_tuple for jax.lax.scan 
-        loop_tuple = (Nparam_vec, combined_var_up, combined_var_down)
-
-        # Loop over systematic variations to calculate net effect
-        combined_var_array, _ = jax.lax.scan(calculate_variations, jnp.ones_like(combined_var_up[0]), loop_tuple)
-
-        return combined_var_array
-
-    # per-process yield contribution function
-    def nu_float_contrib(self, param_vec, yields, variations):
-        # return param_vec * yields * variations
-        return param_vec * yields * variations
-
-    # per-process yield contribution function
-    def nu_fixed_contrib(self, yields, variations):
-        return yields * variations
-
-    def calculate_parameterized_yields_vectorized(self, param_vec, hist_yields, hist_vars):
-        
-        # stack yields and vars
-        hist_yields_float_vec = jnp.stack([hist_yields[p] for p in self.floating_processes])
-        hist_vars_float_vec = jnp.stack([hist_vars  [p] for p in self.floating_processes])
-    
-        # vectorize over the process dimension
-        nu_float = jnp.sum(jax.vmap(self.nu_float_contrib)(param_vec[self._fp_idx], hist_yields_float_vec, hist_vars_float_vec), axis=0)
-        
-        if len(self.fixed_processes)>0:
-            hist_yields_fixed_vec = jnp.stack([hist_yields[p] for p in self.fixed_processes])
-            hist_vars_fixed_vec = jnp.stack([hist_vars  [p] for p in self.fixed_processes])
-        
-            nu_fixed = jnp.sum(jax.vmap(self.nu_fixed_contrib)(hist_yields_float_vec, hist_vars_float_vec), axis=0)
-            
         else:
-            nu_fixed = 0
-    
-        return nu_float + nu_fixed
+            self.jitted_NLL_function = jax.jit(self.full_nll_function)
+            self.grad_jitted_NLL_function = jax.jit(jax.grad(self.jitted_NLL_function))
+
 
 
     # parameterized yields calculation
@@ -148,18 +132,6 @@ class nsbi_inference:
         return nu_tot
 
     # parameterized log-likelihood ratio calculation
-    def calculate_parameterized_ratios_vectorized(self, param_vec, nu_nominal, nu_vars, ratios, ratio_vars):
-
-        # stack yields and vars
-        ratios_float_vec = jnp.stack([nu_nominal[p]*ratios[p] for p in self.floating_processes])
-        ratios_vars_float_vec = jnp.stack([nu_vars[p] * ratio_vars  [p] for p in self.floating_processes])
-
-        # vectorize over the process dimension
-        dnu_dx_float = jnp.sum(jax.vmap(self.nu_float_contrib)(param_vec[self._fp_idx], ratios_float_vec, ratios_vars_float_vec), axis=0)
-            
-        return jnp.log( dnu_dx_float )
-
-    # parameterized log-likelihood ratio calculation
     def calculate_parameterized_ratios(self, param_vec, nu_nominal, nu_vars, ratios, ratio_vars):
 
         dnu_dx = jnp.zeros_like(self.weights)
@@ -173,10 +145,7 @@ class nsbi_inference:
             
         return jnp.log( dnu_dx )
 
-    # Compute the poisson likelihood ratio
-    def pois_loglikelihood(self, data_hist, nu_hist):
 
-        return -2 * jnp.sum( data_hist * jnp.log(nu_hist) - nu_hist)
 
     # compute the full summed log-likelihood
     def full_nll_function(self, param_vec):
@@ -188,18 +157,18 @@ class nsbi_inference:
 
             self.hist_vars[channel] = {}
             for process in self.all_processes:
+                
+                self.hist_vars[channel][process] = calculate_combined_var(param_vec[self.num_unconstrained_params:], 
+                                                                            self.hist_channel_variations[channel][process]['up'],
+                                                                            self.hist_channel_variations[channel][process]['dn'])           
 
-                self.hist_vars[channel][process] = self.calculate_combined_var(param_vec[self.num_unconstrained_params:], 
-                                                                                self.hist_channel_variations[channel][process]['up'],
-                                                                                self.hist_channel_variations[channel][process]['dn'])           
-
-            nu_hist_channel = self.calculate_parameterized_yields_vectorized(param_vec, 
+            nu_hist_channel = self.calculate_parameterized_yields(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
             data_hist_channel = self.data_hist_channel[channel]
 
-            llr_tot += self.pois_loglikelihood(data_hist_channel, nu_hist_channel)
+            llr_tot += pois_loglikelihood(data_hist_channel, nu_hist_channel)
 
         self.ratio_vars = {}
         for channel in self.channels_unbinned:
@@ -208,23 +177,23 @@ class nsbi_inference:
             self.hist_vars[channel] = {}
             self.ratio_vars[channel] = {}
             for process in self.all_processes:
-                self.hist_vars[channel][process]   = self.calculate_combined_var(param_vec[self.num_unconstrained_params:], 
-                                                                                self.hist_channel_variations[channel][process]['up'],
-                                                                                self.hist_channel_variations[channel][process]['dn'])
+                self.hist_vars[channel][process]   = calculate_combined_var(param_vec[self.num_unconstrained_params:], 
+                                                                            self.hist_channel_variations[channel][process]['up'],
+                                                                            self.hist_channel_variations[channel][process]['dn'])
                 
-                self.ratio_vars[channel][process]  = self.calculate_combined_var(param_vec[self.num_unconstrained_params:], 
-                                                                                self.ratio_variations[channel][process]['up'],
-                                                                                self.ratio_variations[channel][process]['dn'])
+                self.ratio_vars[channel][process]  = calculate_combined_var(param_vec[self.num_unconstrained_params:], 
+                                                                            self.ratio_variations[channel][process]['up'],
+                                                                            self.ratio_variations[channel][process]['dn'])
 
-            nu_tot_unbinned = self.calculate_parameterized_yields_vectorized(param_vec, 
+            nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
             data_hist_channel = self.data_hist_channel[channel]
 
-            llr_tot += self.pois_loglikelihood(data_hist_channel, nu_tot_unbinned)
+            llr_tot += pois_loglikelihood(data_hist_channel, nu_tot_unbinned)
 
-            llr_pe = self.calculate_parameterized_ratios_vectorized(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
+            llr_pe = self.calculate_parameterized_ratios(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
                                                         self.ratios[channel], self.ratio_vars[channel]) \
                     - jnp.log(nu_tot_unbinned)
 
@@ -244,30 +213,30 @@ class nsbi_inference:
 
             self.hist_vars[channel] = {key: jnp.ones_like(value) for key, value in self.hist_channels[channel].items()}
 
-            nu_hist_channel = self.calculate_parameterized_yields_vectorized(param_vec, 
+            nu_hist_channel = self.calculate_parameterized_yields(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
             data_hist_channel = self.data_hist_channel[channel]
 
-            llr_tot += self.pois_loglikelihood(data_hist_channel, nu_hist_channel)
+            llr_tot += pois_loglikelihood(data_hist_channel, nu_hist_channel)
 
         self.ratio_vars = {}
         for channel in self.channels_unbinned:
 
             self.hist_vars[channel] = {key: jnp.ones_like(value) for key, value in self.hist_channels[channel].items()}
             
-            nu_tot_unbinned = self.calculate_parameterized_yields_vectorized(param_vec, 
+            nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
                                                                   self.hist_channels[channel], 
                                                                   self.hist_vars[channel])
 
             data_hist_channel = self.data_hist_channel[channel]
 
-            llr_tot += self.pois_loglikelihood(data_hist_channel, nu_tot_unbinned)
+            llr_tot += pois_loglikelihood(data_hist_channel, nu_tot_unbinned)
 
             self.ratio_vars[channel] = {key: jnp.ones_like(value) for key, value in self.ratios[channel].items()}
 
-            llr_pe = self.calculate_parameterized_ratios_vectorized(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
+            llr_pe = self.calculate_parameterized_ratios(param_vec, self.hist_channels[channel], self.hist_vars[channel], 
                                                         self.ratios[channel], self.ratio_vars[channel]) \
                     - jnp.log(nu_tot_unbinned)
 
@@ -277,15 +246,6 @@ class nsbi_inference:
 
 
     def perform_fit(self, fit_strategy=2, freeze_params=[]):
-
-        if self.num_unconstrained_params == len(self.list_params_all):
-
-            self.jitted_NLL_function = jax.jit(self.full_nll_function_noConst)
-            self.grad_jitted_NLL_function = jax.jit(jax.grad(self.jitted_NLL_function))
-
-        else:
-            self.jitted_NLL_function = jax.jit(self.full_nll_function)
-            self.grad_jitted_NLL_function = jax.jit(jax.grad(self.jitted_NLL_function))
             
         m = Minuit(self.jitted_NLL_function, self.asimov_param_vec, 
                     grad=self.grad_jitted_NLL_function, name=tuple(self.list_params_all))
@@ -299,18 +259,12 @@ class nsbi_inference:
         mg = m.migrad()
         print(f'fit: \n {mg}')
 
+        self.pulls_global_fit = jnp.array(m.values)
+
 
     def plot_NLL_scan(self, parameter_name, parameter_label='', bound_range=(0.0, 3.0), 
-                      fit_strategy=2, isConstrainedNP=False, freeze_params=[]):
+                      fit_strategy=2, isConstrainedNP=False, freeze_params=[], doStatOnly = False):
 
-        if self.num_unconstrained_params == len(self.list_params_all):
-
-            self.jitted_NLL_function = jax.jit(self.full_nll_function_noConst)
-            self.grad_jitted_NLL_function = jax.jit(jax.grad(self.jitted_NLL_function))
-
-        else:
-            self.jitted_NLL_function = jax.jit(self.full_nll_function)
-            self.grad_jitted_NLL_function = jax.jit(jax.grad(self.jitted_NLL_function))
             
         m = Minuit(self.jitted_NLL_function, self.asimov_param_vec, 
                     grad=self.grad_jitted_NLL_function, name=tuple(self.list_params_all))
@@ -321,7 +275,26 @@ class nsbi_inference:
             for param in freeze_params:
                 m.fixed[param] = True
         scan_points, NLL_value, _ = m.mnprofile(parameter_name, bound=bound_range, subtract_min=True)
-        plt.plot(scan_points, NLL_value)
+        if doStatOnly: 
+            label_stat_syst = 'Stat+Syst'
+            label_stat_only = 'Stat Only'
+
+            m_StatOnly = Minuit(self.jitted_NLL_function, self.pulls_global_fit, 
+                                grad=self.grad_jitted_NLL_function, name=tuple(self.list_params_all))
+            m_StatOnly.errordef = Minuit.LEAST_SQUARES
+            m_StatOnly.strategy = fit_strategy
+            for param in self.list_params_all[self.num_unconstrained_params:]:
+                m_StatOnly.fixed[param] = True
+            scan_points_StatOnly, NLL_value_StatOnly, _ = m_StatOnly.mnprofile(parameter_name, bound=bound_range, subtract_min=True)
+            
+            plt.plot(scan_points, NLL_value_StatOnly, label = label_stat_syst, color = 'b', linestyle='--')
+            plt.plot(scan_points_StatOnly, NLL_value_StatOnly, label = label_stat_only, color = 'b')
+            plt.legend()
+            
+        else:
+            label_stat_syst = ''
+            plt.plot(scan_points, NLL_value, label = label_stat_syst)
+            
         if not isConstrainedNP:
             plt.axis(ymin=0.0)
         else:
