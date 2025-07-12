@@ -287,8 +287,9 @@ class nsbi_inference:
                 m_StatOnly.fixed[param] = True
             scan_points_StatOnly, NLL_value_StatOnly, _ = m_StatOnly.mnprofile(parameter_name, bound=bound_range, subtract_min=True)
             
-            plt.plot(scan_points, NLL_value_StatOnly, label = label_stat_syst, color = 'b', linestyle='--')
-            plt.plot(scan_points_StatOnly, NLL_value_StatOnly, label = label_stat_only, color = 'b')
+            plt.plot(scan_points_StatOnly, NLL_value_StatOnly, label = label_stat_only, color = 'b', linestyle='--')
+            plt.plot(scan_points, NLL_value, label = label_stat_syst, color = 'b')
+            
             plt.legend()
             
         else:
