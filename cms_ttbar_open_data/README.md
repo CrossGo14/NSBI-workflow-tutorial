@@ -1,3 +1,5 @@
+Note: this is an outdated example, no longer supported by the latest version of `nsbi-common-utils`. Please look at the FAIR Universe example for a working tutorial.
+
 # Application to CMS Open data - ttbar production
 
 -----
