@@ -4,9 +4,9 @@ Workflow
 This example needs the execution of notebooks in the following order, with intermediate data cached locally. 
 
 1. [`Data_Preprocessing.ipynb`](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/FAIR_universe_Higgs_tautau/Data_Preprocessing.ipynb) - loads FAIR Universe dataset and stores a dataframe.
-2. [`Neural_Likelihood_Ratio_Estimation.ipynb`](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/cms_ttbar_open_data/Neural_Likelihood_Ratio_Estimation.ipynb) - loads cached dataframe object and trains density ratios using the nominal samples.
-3. [`Systematic_Uncertainty_Estimation.ipynb`](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/cms_ttbar_open_data/Systematic_Uncertainty_Estimation.ipynb) - loads cached dataframe object and trains density ratios for the systematic variation samples.
-4. [`Parameter_Fitting_with_Systematics.ipynb`](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/cms_ttbar_open_data/Parameter_Fitting_with_Systematics.ipynb) - uses the trained density ratios for unbinned statistical inference.
+2. [`Neural_Likelihood_Ratio_Estimation.ipynb`](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/FAIR_universe_Higgs_tautau/Neural_Likelihood_Ratio_Estimation.ipynb) - loads cached dataframe object and trains density ratios using the nominal samples.
+3. [`Systematic_Uncertainty_Estimation.ipynb`](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/FAIR_universe_Higgs_tautau/Systematic_Uncertainty_Estimation.ipynb) - loads cached dataframe object and trains density ratios for the systematic variation samples.
+4. [`Parameter_Fitting_with_Systematics.ipynb`](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/FAIR_universe_Higgs_tautau/Parameter_Fitting_with_Systematics.ipynb) - uses the trained density ratios for unbinned statistical inference.
 
 FAIR Universe Dataset
 --
