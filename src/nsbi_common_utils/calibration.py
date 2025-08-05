@@ -1,7 +1,6 @@
 #################################################
 ### Histogram-based calibration strategy. 
 ### Base part of the code copied from https://github.com/smsharma/mining-for-substructure-lens
-### New weighted quantiles method, and small changes
 #################################################
 
 import numpy as np
@@ -52,7 +51,7 @@ class HistogramCalibrator:
             edges = np.linspace(hmin, hmax, nbins + 1)
         elif mode == "dynamic":
             #percentages = 100.0 * np.linspace(0.0, 1.0, nbins+1)
-            edges = self.weighted_quantile(data, np.linspace(0.0, 1.0, nbins+1))
+            edges = self.weighted_quantile(data, np.linspace(hmin, hmax, nbins+1))
         elif mode == "dynamic_unweighted":
             percentages = 100.0 * np.linspace(0.0, 1.0, nbins+1)
             edges = np.percentile(data, percentages)
@@ -67,6 +66,9 @@ class HistogramCalibrator:
         histo, _ = np.histogram(data, bins=self.edges, range=self.range, weights=weights)
         i = np.sum(histo)
         histo = histo / i
+        #histo += epsilon
+        #i = np.sum(histo)
+        #histo = histo / i
         
         err,_ = np.histogram(data, bins=self.edges, range=self.range, weights=weights**2)
         err = err/(i**2)
