@@ -1,0 +1,39 @@
+channel_selections = {'CR': {'observable': 'presel_score', 
+                             'lower_presel': -999, 
+                             'upper_presel': preselection_cuts.get('lower'), 
+                             'num_bins': 4},
+                      
+                      'SR_binned': {'observable': 'presel_score', 
+                                    'lower_presel': preselection_cuts.get('upper'), 
+                                    'upper_presel': -999,
+                                    'num_bins': 1},
+                      
+                      'SR': {'observable': None, 
+                             'upper_presel': preselection_cuts.get('upper'), 
+                             'lower_presel': preselection_cuts.get('lower')}}
+
+Regions :
+  - Name            : 'SR_binned'
+    Type            : 'binned'
+    Filter          : 'presel_score < '
+    Variable        : ''
+    Binning         : []
+
+  - Name            : 'CR'
+    Type            : 'binned'
+    Filter          : ''
+    Variable        : ''
+    Binning         : []
+
+  - Name            : 'SR'
+    Type            : 'unbinned'
+    Filter          : ''
+
+  - Name: 'CR'
+    Type: 'binned'
+  - Name: 'SR'
+    Type: 'unbinned'
+
+  Samples :
+    - Name          :
+      SamplePaths     : 'XYZ.h5'

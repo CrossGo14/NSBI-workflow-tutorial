@@ -2,15 +2,34 @@ import json, math
 import numpy as np
 from collections.abc import Callable as CABC
 
-class workspace_builder:
+class WorkspaceBuilder:
+    """Collects functionality to build a workspace"""
 
-    def __init__(self, version="1.0.0"):
-        self.version        = version
-        self.channel_specs  = []
-        self.observations   = []
-        # a place for users to register systematics:
-        #   { channel_name: { sample_name: [ {name,typ,data}, … ] } }
-        self._systematics   = {}
+    def __init__(self, config: Dict[str, Any]) -> None:
+        """Creates a workspace corresponding to configuration file"""
+        self.config = config
+
+    def channels(self) -> List[Dict[str, Any]]:
+        """Returns the list of channel dictionaries, containing model information
+
+        Returns:
+            List[Dict[str, Any]]: channels for the custom NSBI workspace
+        """
+        regions      = self.config["Regions"]
+        channels = []
+        for region in regions:
+            channel_dict = {}
+            channel_dict.update(
+                {
+                    "name"      : region["Name"],
+                    "type"      : region["Type"]
+                }
+            )
+            samples = []
+
+            for sample in self.config["Samples"]:
+
+            
 
     def add_systematic(
         self,
