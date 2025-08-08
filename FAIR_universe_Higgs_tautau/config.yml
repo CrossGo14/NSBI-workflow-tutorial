@@ -8,7 +8,7 @@ BACKGROUND_PROCESSES:
 REFERENCE_PROCESSES:
 - htautau
 - ttbar
-process_to_int_labels_dict:
+PROCESS_TO_INT_LABELS_DICT:
     htautau: 0
     ztautau: 1
     ttbar: 2
