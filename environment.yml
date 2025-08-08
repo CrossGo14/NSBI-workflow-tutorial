@@ -1,4 +1,4 @@
-name: NSBI
+name: NSBI_env
 channels:
   - conda-forge
 dependencies:

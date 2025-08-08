@@ -1,88 +1,37 @@
-# Base path to save/load data from
-path_prefix : '/home/jaySandesara/NSBI_workflow_tutorial/FAIR_universe_Higgs_tautau/'
-
-# Cache name
-path_saved_data: 'cached_data/'
-
-# Directory where pre-selection model is saved
-path_preselection_NN_model: 'preselection_saved_NN/'
-
-# Features to use for training NNs
-features : ['DER_mass_transverse_met_lep',
-       'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
-       'DER_pt_ratio_lep_had', 'DER_met_phi_centrality']
-
-# Features to standardize before training
-features_scaling : ['DER_mass_transverse_met_lep',
-       'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
-       'DER_pt_ratio_lep_had', 'DER_met_phi_centrality']
-
-
-# Signal processes in the model
-signal_processes : ["htautau"]
-
-# Background processes in the model
-background_processes : ["ttbar", "ztautau"]
-
-# choice of reference hypothesis
-# ref_processes : ["htautau"] 
-ref_processes : ["htautau", "ttbar"] 
-
-# mix_model_hypotheses = signal_processes + background_processes for which density ratios need to be estimated
-# mix_model_hypotheses : ["ttbar", "ztautau"]
-mix_model_hypotheses : ["htautau", "ttbar", "ztautau"]
-
-
-# Assign an integer with each of the processes 
-labels_dict:
-  htautau: 0
-  ztautau: 1
-  ttbar: 2
-  # diboson: 3 # exclude low stats diboson sample for now
-
-# float factors multiplying the probabilities in the preselection score observable 
-pre_factor_preselection_score:
-  htautau: 1.0
-  ztautau: 1.0
-  ttbar: 1.0
-
-# Number of unconstrained floating parameters in the inference model
-num_unconstrained_params : 3
-
-list_unconstrained_params : ['mu_higgs', 'mu_ttbar', 'mu_z']
-floating_processes    : ['htautau', 'ttbar', 'ztautau']
-fixed_processes       : []
-
-# labels for the various binned and unbinned channels
-channels_binned : ['SR_binned', 'CR']
-channels_unbinned : ['SR']
-
-# Mapping process to index of the floating parameters
-process_index : 
-    htautau: 
-        - 0
-    ttbar:
-        - 1
-    ztautau: 
-        - 2
-
-
-# Systematics to use for the analysis model
-dict_systs:
-  TES:
-    process:
-      - htautau
-      - ttbar
-      - ztautau
-    directions:
-      - up
-      - dn
-
-  JES:
-    process:
-      - htautau
-      - ttbar
-      - ztautau
-    directions:
-      - up
-      - dn
+PATH_PREFIX: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/
+PATH_SAVED_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/
+SIGNAL_PROCESSES:
+- htautau
+BACKGROUND_PROCESSES:
+- ttbar
+- ztautau
+REFERENCE_PROCESSES:
+- htautau
+- ttbar
+process_to_int_labels_dict:
+    htautau: 0
+    ztautau: 1
+    ttbar: 2
+TRAINING_FEATURES:
+- DER_mass_transverse_met_lep
+- log_DER_mass_vis
+- log_DER_pt_h
+- DER_deltar_had_lep
+- log_DER_pt_tot
+- log_DER_sum_pt
+- DER_pt_ratio_lep_had
+- DER_met_phi_centrality
+TRAINING_FEATURES_TO_SCALE:
+- DER_mass_transverse_met_lep
+- log_DER_mass_vis
+- log_DER_pt_h
+- DER_deltar_had_lep
+- log_DER_pt_tot
+- log_DER_sum_pt
+- DER_pt_ratio_lep_had
+- DER_met_phi_centrality
+PATH_TO_nominal_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_nominal.h5
+PATH_TO_TES_up_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_TES_up.h5
+PATH_TO_TES_dn_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_TES_dn.h5
+PATH_TO_JES_up_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_JES_up.h5
+PATH_TO_JES_dn_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_JES_dn.h5
