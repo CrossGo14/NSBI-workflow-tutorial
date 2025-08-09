@@ -753,9 +753,13 @@ class TrainEvaluate_NN:
 
         else:
             raise Exception("aggregation_type not recognized, please choose between median_ratio, mean_ratio, median_score or mean_score")
+
+        saved_ratio_path = f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy"
+        np.save(saved_ratio_path, ratio_ensemble)
         
-        np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio_ensemble)
-        print(f"Density ratios saved")
+        print(f"Density ratios saved at path {saved_ratio_path}")
+
+        return saved_ratio_path
         
 
 def build_model(n_hidden=4, 
