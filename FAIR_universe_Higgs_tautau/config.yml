@@ -35,3 +35,24 @@ PATH_TO_TES_up_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_univ
 PATH_TO_TES_dn_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_TES_dn.h5
 PATH_TO_JES_up_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_JES_up.h5
 PATH_TO_JES_dn_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_JES_dn.h5
+PATH_PRESEL_MODEL: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/preselection_model/
+Regions:
+-   Name: CR
+    Filter: presel_score<-1.0
+    Variable: presel_score
+    Binning:
+    - -8.747320175170898
+    - -6.810490310192108
+    - -4.873660445213318
+    - -2.9368305802345276
+    - -1.0000007152557373
+-   Name: SR_binned
+    Filter: presel_score>4.5
+    Variable: presel_score
+    Binning:
+    - 4.500021934509277
+    - 5.942246437072754
+-   Name: SR
+    Filter: presel_score>=-1.0 & presel_score<=4.5
+    Variable: null
+    Binning: null

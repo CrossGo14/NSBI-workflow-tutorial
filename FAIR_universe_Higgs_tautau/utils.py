@@ -25,24 +25,9 @@ def preselection_using_score(dataset, channel_selections):
 
     for channel, selection_dict in channel_selections.items():
 
-        lower_cut = selection_dict.get('lower_presel')
-        upper_cut = selection_dict.get('upper_presel')
-
-        if (lower_cut != -999) and (upper_cut != -999):
-    
-            mask_channel = (
-                (dataset.presel_score >= lower_cut) &
-                (dataset.presel_score <= upper_cut)
-            )
-    
-        elif (lower_cut != -999):
-            mask_channel = (dataset.presel_score >= lower_cut)
-    
-        elif (upper_cut != -999):
-            mask_channel = (dataset.presel_score <= upper_cut)
-    
-    
-        dataset_channel[channel]   = dataset[mask_channel].copy()
+        selection = selection_dict['preselections']
+        
+        dataset_channel[channel] = dataset.query(selection)
 
     return dataset_channel
 
