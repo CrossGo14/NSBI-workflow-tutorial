@@ -489,7 +489,7 @@ class TrainEvaluate_NN:
     
                 file_calib = open(path_to_calibrated_object, 'wb') 
     
-                pickle.dump(self.histogram_calibrator, file_calib)
+                pickle.dump(self.histogram_calibrator[ensemble_index], file_calib)
     
             else:
                 if not os.path.exists(path_to_calibrated_object) or recalibrate_output:
@@ -506,6 +506,7 @@ class TrainEvaluate_NN:
                 
                     file_calib = open(path_to_calibrated_object, 'rb') 
                     self.histogram_calibrator[ensemble_index] = pickle.load(file_calib)
+                    print(f"L 509 calibrator object loaded = {self.histogram_calibrator}")
             
             self.full_data_prediction[ensemble_index] = self.predict_with_model(self.dataset, 
                                                                                 ensemble_index = ensemble_index, 
@@ -582,7 +583,7 @@ class TrainEvaluate_NN:
             pred = convert_to_score(pred)
 
         if (self.calibration) & (self.calibration_switch):
-
+    
             pred = self.histogram_calibrator[ensemble_index].cali_pred(pred)
             pred = pred.reshape(pred.shape[0],)
             pred = np.clip(pred, 1e-25, 0.9999999)
