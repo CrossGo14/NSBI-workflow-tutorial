@@ -52,6 +52,16 @@ Regions:
     Filter: presel_score>=-1.0 & presel_score<=4.5
     Variable: null
     Binning: null
+    TrainedModels:
+    -   Name: htautau
+        Models: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_nominal/output_model_params_htautau/
+        Ratios: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_nominal/output_ratios_htautau/ratio_htautau.npy
+    -   Name: ttbar
+        Models: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_nominal/output_model_params_ttbar/
+        Ratios: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_nominal/output_ratios_ttbar/ratio_ttbar.npy
+    -   Name: ztautau
+        Models: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_nominal/output_model_params_ztautau/
+        Ratios: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_nominal/output_ratios_ztautau/ratio_ztautau.npy
 MIX_MODEL_HYPOTHESES:
 - htautau
 - ttbar

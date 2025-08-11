@@ -756,8 +756,6 @@ class TrainEvaluate_NN:
 
         saved_ratio_path = f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy"
         np.save(saved_ratio_path, ratio_ensemble)
-        
-        print(f"Density ratios saved at path {saved_ratio_path}")
 
         return saved_ratio_path
         
