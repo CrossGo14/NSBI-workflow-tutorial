@@ -75,6 +75,22 @@ Systematics:
     - htautau
     - ztautau
     - ttbar
+    TrainedModels:
+    -   Name: htautau
+        ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_htautau_TES_up/
+        RatiosUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_htautau_TES_up/ratio_TES_up.npy
+        ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_htautau_TES_dn/
+        RatiosDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_htautau_TES_dn/ratio_TES_dn.npy
+    -   Name: ztautau
+        ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_ztautau_TES_up/
+        RatiosUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_ztautau_TES_up/ratio_TES_up.npy
+        ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_ztautau_TES_dn/
+        RatiosDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_ztautau_TES_dn/ratio_TES_dn.npy
+    -   Name: ttbar
+        ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_ttbar_TES_up/
+        RatiosUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_ttbar_TES_up/ratio_TES_up.npy
+        ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_ttbar_TES_dn/
+        RatiosDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_ttbar_TES_dn/ratio_TES_dn.npy
 -   Name: JES
     weight_up: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_JES_up.h5
     weight_dn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/df_JES_dn.h5
@@ -83,3 +99,19 @@ Systematics:
     - htautau
     - ztautau
     - ttbar
+    TrainedModels:
+    -   Name: htautau
+        ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_htautau_JES_up/
+        RatiosUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_htautau_JES_up/ratio_JES_up.npy
+        ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_htautau_JES_dn/
+        RatiosDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_htautau_JES_dn/ratio_JES_dn.npy
+    -   Name: ztautau
+        ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_ztautau_JES_up/
+        RatiosUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_ztautau_JES_up/ratio_JES_up.npy
+        ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_ztautau_JES_dn/
+        RatiosDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_ztautau_JES_dn/ratio_JES_dn.npy
+    -   Name: ttbar
+        ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_ttbar_JES_up/
+        RatiosUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_ttbar_JES_up/ratio_JES_up.npy
+        ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_model_params_ttbar_JES_dn/
+        RatiosDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/cached_data/output_training_systematics/output_ratios_ttbar_JES_dn/ratio_JES_dn.npy
