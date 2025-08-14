@@ -31,6 +31,13 @@ conda install ipykernel
 python -m ipykernel install --user --name NSBI --display-name "NSBI"
 ```
 
+As an alternative, the ```pixi.lock``` file, together with the ```[pixi]``` specifications in ```pyproject.toml```, allow to create a pixi workspace to work with. 
+If pixi is available on the machine, proceed with 
+```
+pixi install
+```
+A jupyter kernel can be created with the same commands reported above.
+
 ## Introduction
 
 The notebooks presented here aim to serve as a scaled-down and simplified tutorial for the workflow building related to the NSBI analysis recently published by ATLAS:
