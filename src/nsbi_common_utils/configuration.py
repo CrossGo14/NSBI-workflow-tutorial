@@ -84,6 +84,10 @@ class ConfigManager:
         self.validate(self.config)
         return True
 
+    def list_channels(self) -> List[str]:
+        """List region names in the config file."""
+        return [region.get("Name") for region in self.config.get("Regions", [])]
+
     def load(self, file_path) -> Dict[str, Any]:
         """Loads, validates, and returns a config file from the provided path.
 
@@ -109,10 +113,9 @@ class ConfigManager:
         try:
             serialized = yaml.safe_dump(self.config, sort_keys=False, allow_unicode=True)
             tmp_path.write_text(serialized, encoding="utf-8")
-            tmp_path.replace(self.path)  # atomic on most OS/filesystems
+            tmp_path.replace(self.path) 
             log.info("Wrote config to %s", self.path)
         except Exception as e:
-            # Try to clean up tmp file, but ignore if it fails
             try:
                 if tmp_path.exists():
                     tmp_path.unlink()

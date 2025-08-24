@@ -1,35 +1,25 @@
-PATH_PREFIX: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/
-PATH_SAVED_DATA: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/
+Samples:
+    - Name              : htautau
+      Tree              : tree_htautau
+      SamplePath        : saved_datasets/dataset_nominal.root
+      Weight            : weight
+      UseAsReference    : True
+      UseAsBasis        : True
 
-PROCESSES:
-    - Name : htautau
-      RootFile: 
-          FilePath     : None
-      DataFrame: 
-        FilePath     : /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/df_nominal.h5
-        ColumnName   : type
-
-    - Name : ttbar
-      RootFile: 
-          FilePath     : None
-      DataFrame: 
-        FilePath     : /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/df_nominal.h5
-        ColumnName   : type
+    - Name              : ttbar
+      Tree              : tree_ttbar
+      SamplePath        : saved_datasets/dataset_nominal.root
+      Weight            : weight
+      UseAsReference    : True
+      UseAsBasis        : True
         
     - Name : ztautau
-      RootFile: 
-          FilePath     : None
-      DataFrame: 
-        FilePath     : /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/df_nominal.h5
-        ColumnName   : type
+      Tree              : tree_ztautau
+      SamplePath        : saved_datasets/dataset_nominal.root
+      Weight            : weight
+      UseAsReference    : False
+      UseAsBasis        : True
 
-REFERENCE_PROCESSES:
-    - htautau
-    - ttbar
-MIX_MODEL_HYPOTHESES:
-    - htautau
-    - ttbar
-    - ztautau
 
 TRAINING_FEATURES:
     - DER_mass_transverse_met_lep
