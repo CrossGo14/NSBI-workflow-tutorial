@@ -79,7 +79,7 @@ Systematics:
                 Weight            : weights
 
 
-TRAINING_FEATURES:
+TrainingFeatures:
     - DER_mass_transverse_met_lep
     - log_DER_mass_vis
     - log_DER_pt_h
@@ -89,7 +89,7 @@ TRAINING_FEATURES:
     - DER_pt_ratio_lep_had
     - DER_met_phi_centrality
     
-TRAINING_FEATURES_TO_SCALE:
+TrainingFeaturesToStandardize:
     - DER_mass_transverse_met_lep
     - log_DER_mass_vis
     - log_DER_pt_h
@@ -98,11 +98,6 @@ TRAINING_FEATURES_TO_SCALE:
     - log_DER_sum_pt
     - DER_pt_ratio_lep_had
     - DER_met_phi_centrality
-    
-PROCESS_TO_INT_LABELS_DICT:
-    htautau   : 0
-    ztautau   : 1
-    ttbar     : 2
 
 Regions:
 -   Name: CR

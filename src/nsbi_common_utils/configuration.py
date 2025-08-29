@@ -36,6 +36,12 @@ class ConfigManager:
 
         self.validate(self.config)
 
+    def get_training_features(
+        self
+    ):
+
+        return self.config['TrainingFeatures'], self.config['TrainingFeaturesToStandardize']
+
     def add_channel(
         self,
         channel_name: str,
