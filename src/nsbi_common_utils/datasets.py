@@ -36,6 +36,8 @@ class datasets:
                                                                     tree_name, 
                                                                     branches_to_load)
 
+            dict_datasets["Nominal"][sample_name]["sample_name"] = sample_name
+
             if "Weight" in dict_sample.keys():
                 dict_datasets["Nominal"][sample_name] = dict_datasets["Nominal"][sample_name].rename(columns={dict_sample['Weight']: "weights"})
             else:
@@ -60,6 +62,7 @@ class datasets:
                                                                                     tree_name, 
                                                                                     branches_to_load)
 
+                            dict_datasets[syst_name_var][sample_name]["sample_name"] = sample_name
 
                             if "Weight" in dict_sample.keys():
                                 dict_datasets[syst_name_var][sample_name] = dict_datasets[syst_name_var][sample_name].rename(columns={dict_sample['Weight']: "weights"})
@@ -117,32 +120,6 @@ class datasets:
                                                 path_to_root_file, 
                                                 tree_name)
 
-
-    # def _save_dataset(self, 
-    #                 dataset,
-    #                 path_to_root_file  : str,
-    #                 tree_name         : str):
-
-    #     if "weights" not in self.branches_all:
-    #         self.branches_all =  self.branches_all + ["weights"]
-    #     dataset = dataset[self.branches_all]
-
-    #     tmp_path = path_to_root_file + ".tmp"
-    #     with uproot.open(path_to_root_file) as fin, uproot.recreate(tmp_path) as fout:
-    #         for tree_name_in_file, tree_obj in fin.items(): 
-    #             tree_name_in_file = tree_name_in_file.split(";")[0]
-    #             if tree_name_in_file == tree_name:
-    #                 continue 
-    #             try:
-    #                 fout[tree_name_in_file] = tree_obj  
-    #             except Exception:
-    #                 print(f"Unable to save.")
-    #                 pass
-
-    #         fout[tree_name] = dataset
-
-    #     os.replace(tmp_path, path_to_root_file)  
-
     def _save_dataset(self,
                     dataset, 
                     path_to_root_file: str, 
@@ -166,3 +143,40 @@ class datasets:
             fout[tree_name] = dataset
 
         os.replace(tmp_path, path_to_root_file)
+
+    def merge_dataframe_dict_for_training(self, 
+                                            dataset_dict, 
+                                            label_sample_dict: dict[int, list[str]]):
+
+        list_dataframes = []
+        for sample_name, dataset in dataset_dict.items():
+            list_dataframes.append(dataset)
+
+        dataset = pd.concat(list_dataframes)
+
+        dataset = self._add_normalised_weights_and_train_label_class(dataset, 
+                                                                    label_sample_dict)
+
+        return dataset
+
+    def _add_normalised_weights_and_train_label_class(self,
+                                                    dataset, 
+                                                    label_sample_dict: dict[int, list[str]]):
+
+        dataset['weights_normed']       = dataset['weights'].to_numpy()
+        dataset['train_labels']         = -999
+
+        for label, sample_names in label_sample_dict.items():
+
+            mask_sample_names                                     = np.isin(dataset["sample_name"], sample_names)
+
+            dataset.loc[mask_sample_names, "train_labels"]        = label
+
+            total_sample_weight                                   = dataset.loc[mask_sample_names, "weights"].sum()
+
+            dataset.loc[mask_sample_names, "weights_normed"]      = dataset.loc[mask_sample_names, "weights_normed"] / total_sample_weight
+
+        return dataset
+
+
+

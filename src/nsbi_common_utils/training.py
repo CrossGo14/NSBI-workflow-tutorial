@@ -36,7 +36,7 @@ class TrainEvaluatePreselNN:
     '''
     A class for training the multi-class classification neural network for preselecting phase space for SBI
     '''
-    def __init__(self, dataset, num_classes, features, features_scaling):
+    def __init__(self, dataset, features, features_scaling):
         '''
         dataset: dataframe with the multiple classes for training
         num_classes: number of classes corresponding to the number of output nodes of softmax layer
@@ -47,7 +47,7 @@ class TrainEvaluatePreselNN:
         self.data_features_training = dataset[features].copy()
         self.features = features
         self.features_scaling = features_scaling
-        self.num_classes = num_classes
+        self.num_classes = len(np.unique(dataset.train_labels))
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
     def train(self, test_size=0.15, 
