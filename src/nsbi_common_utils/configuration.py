@@ -6,7 +6,6 @@ import pathlib
 import pkgutil
 from typing import Any, Dict, List, Literal, Optional, Union
 
-import jsonschema
 import yaml
 
 
@@ -19,10 +18,10 @@ class ConfigManager:
 
     def __init__(self, 
                 file_path_string    : Union[str, pathlib.Path],
-                create_if_missing   : bool = False,
-                initial_template    : Optional[Dict[str, Any]]):
+                initial_template    : Optional[Dict[str, Any]] = None,
+                create_if_missing   : bool = False):
 
-        self.path       = pathlib.Path(file_path)
+        self.path       = pathlib.Path(file_path_string)
         self.config : Dict[str, Any]
 
         if not self.path.exists():
@@ -88,7 +87,7 @@ class ConfigManager:
         """List region names in the config file."""
         return [region.get("Name") for region in self.config.get("Regions", [])]
 
-    def load(self, file_path) -> Dict[str, Any]:
+    def load(self, file_path_string) -> Dict[str, Any]:
         """Loads, validates, and returns a config file from the provided path.
 
         Args:
