@@ -146,7 +146,7 @@ class datasets:
 
     def merge_dataframe_dict_for_training(self, 
                                             dataset_dict, 
-                                            label_sample_dict: dict[int, list[str]]):
+                                            label_sample_dict: dict[str, int]):
 
         list_dataframes = []
         for sample_name, dataset in dataset_dict.items():
@@ -161,20 +161,20 @@ class datasets:
 
     def _add_normalised_weights_and_train_label_class(self,
                                                     dataset, 
-                                                    label_sample_dict: dict[int, list[str]]):
+                                                    label_sample_dict: dict[str, int]):
 
         dataset['weights_normed']       = dataset['weights'].to_numpy()
         dataset['train_labels']         = -999
 
-        for label, sample_names in label_sample_dict.items():
+        for sample_name, label in label_sample_dict.items():
 
-            mask_sample_names                                     = np.isin(dataset["sample_name"], sample_names)
+            mask_sample_name                                     = np.isin(dataset["sample_name"], [sample_name])
 
-            dataset.loc[mask_sample_names, "train_labels"]        = label
+            dataset.loc[mask_sample_name, "train_labels"]        = label
 
-            total_sample_weight                                   = dataset.loc[mask_sample_names, "weights"].sum()
+            total_sample_weight                                   = dataset.loc[mask_sample_name, "weights"].sum()
 
-            dataset.loc[mask_sample_names, "weights_normed"]      = dataset.loc[mask_sample_names, "weights_normed"] / total_sample_weight
+            dataset.loc[mask_sample_name, "weights_normed"]      = dataset.loc[mask_sample_name, "weights_normed"] / total_sample_weight
 
         return dataset
 
