@@ -145,11 +145,16 @@ class datasets:
         os.replace(tmp_path, path_to_root_file)
 
     def merge_dataframe_dict_for_training(self, 
-                                            dataset_dict, 
-                                            label_sample_dict: dict[str, int]):
+                                        dataset_dict, 
+                                        label_sample_dict: dict[str, int],
+                                        samples_to_merge = []):
+
+        if len(samples_to_merge) == 0:
+            raise Exception
 
         list_dataframes = []
         for sample_name, dataset in dataset_dict.items():
+            if sample_name not in samples_to_merge: continue
             list_dataframes.append(dataset)
 
         dataset = pd.concat(list_dataframes)
@@ -172,9 +177,15 @@ class datasets:
 
             dataset.loc[mask_sample_name, "train_labels"]        = label
 
-            total_sample_weight                                   = dataset.loc[mask_sample_name, "weights"].sum()
+        train_labels_unique = np.unique(dataset.train_labels)
 
-            dataset.loc[mask_sample_name, "weights_normed"]      = dataset.loc[mask_sample_name, "weights_normed"] / total_sample_weight
+        for train_label in train_labels_unique:
+
+            mask_train_label                                     = np.isin(dataset["train_labels"], [train_label])
+
+            total_train_weight                                   = dataset.loc[mask_train_label, "weights"].sum()
+
+            dataset.loc[mask_train_label, "weights_normed"]      = dataset.loc[mask_train_label, "weights_normed"] / total_train_weight
 
         return dataset
 

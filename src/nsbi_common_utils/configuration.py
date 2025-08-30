@@ -4,7 +4,7 @@ import json
 import logging
 import pathlib
 import pkgutil
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import yaml
 
@@ -18,11 +18,11 @@ class ConfigManager:
 
     def __init__(self, 
                 file_path_string    : Union[str, pathlib.Path],
-                initial_template    : Optional[Dict[str, Any]] = None,
+                initial_template    : Optional[dict[str, Any]] = None,
                 create_if_missing   : bool = False):
 
         self.path       = pathlib.Path(file_path_string)
-        self.config : Dict[str, Any]
+        self.config : dict[str, Any]
 
         if not self.path.exists():
             if create_if_missing:
@@ -36,9 +36,7 @@ class ConfigManager:
 
         self.validate(self.config)
 
-    def get_training_features(
-        self
-    ):
+    def get_training_features(self):
 
         return self.config['TrainingFeatures'], self.config['TrainingFeaturesToStandardize']
 
@@ -60,7 +58,7 @@ class ConfigManager:
             binning: list with bin boundaries. None if unbinned SBI used in the region
             overwrite: allow replacing an existing region of same name
         """
-        regions: List[Dict[str, Any]] = self.config["Regions"]
+        regions: list[dict[str, Any]] = self.config["Regions"]
 
         existing_idx = self._index_of_region(channel_name)
         new_region = {
@@ -89,18 +87,18 @@ class ConfigManager:
         self.validate(self.config)
         return True
 
-    def list_channels(self) -> List[str]:
-        """List region names in the config file."""
+    def list_channels(self) -> list[str]:
+        """list region names in the config file."""
         return [region.get("Name") for region in self.config.get("Regions", [])]
 
-    def load(self, file_path_string) -> Dict[str, Any]:
+    def load(self, file_path_string) -> dict[str, Any]:
         """Loads, validates, and returns a config file from the provided path.
 
         Args:
             file_path_string (Union[str, pathlib.Path]): path to config file
 
         Returns:
-            Dict[str, Any]: nsbi_common_utils configuration
+            dict[str, Any]: nsbi_common_utils configuration
         """
         file_path = pathlib.Path(file_path_string)
         log.info(f"Opening config file {file_path}")
@@ -128,14 +126,14 @@ class ConfigManager:
                 pass
             raise ConfigError(f"Failed to save config: {e}") from e
 
-    def validate(self, config: Dict[str, Any]) -> bool:
+    def validate(self, config: dict[str, Any]) -> bool:
         """Returns True if the config file is validated, otherwise raises exceptions.
 
         Checks that the config satisfies the json schema, and performs additional checks to
         validate the config further.
 
         Args:
-            config (Dict[str, Any]): nsbi_common_utils configuration
+            config (dict[str, Any]): nsbi_common_utils configuration
 
         Raises:
             NotImplementedError: when more than one data sample is found
@@ -150,8 +148,27 @@ class ConfigManager:
         # if no issues are found
         return True
 
+    def get_basis_samples(self):
+        basis_samples = []
+        samples: list[dict[str, Any]] = self.config["Samples"]
+        for count, sample in enumerate(samples):
+            if sample.get("UseAsBasis", False):
+                basis_samples.append(sample.get("Name"))
+
+        return basis_samples
+
+    def get_reference_samples(self):
+        basis_samples = []
+        samples: list[dict[str, Any]] = self.config["Samples"]
+        for count, sample in enumerate(samples):
+            if sample.get("UseAsReference", False):
+                basis_samples.append(sample.get("Name"))
+
+        return basis_samples
+
+
     def _index_of_region(self, channel_name: str) -> Optional[int]:
-        regions: List[Dict[str, Any]] = self.config["Regions"]
+        regions: list[dict[str, Any]] = self.config["Regions"]
         for count, region in enumerate(regions):
             if region.get("Name") == channel_name:
                 return count

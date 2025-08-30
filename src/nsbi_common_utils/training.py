@@ -7,6 +7,13 @@ pd.options.mode.chained_assignment = None
 
 import pickle 
 
+from pathlib import Path
+
+import tf2onnx
+import onnx
+import onnxruntime as rt
+
+from typing import Union, Dict
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.callbacks import EarlyStopping
@@ -32,22 +39,73 @@ from joblib import dump, load
 
 from tensorflow.keras.models import model_from_json
 
+
+
+
+def save_model(onnx_model_instance, 
+                    path_to_save_model: Union[str, Path], 
+                    scaler_instance, 
+                    path_to_save_scaler: Union[str, Path]) -> None:
+
+        # Save ONNX model
+        onnx.save_model(onnx_model, str(path_to_save_model))
+
+        # Save the standardization scaler
+        dump(scaler_instance, str(path_to_save_scaler), compress=True)
+
+
+def load_trained_model(path_to_saved_model: Union[Path, str], 
+                        path_to_saved_scaler: Union[Path, str]):
+
+    # Load scaler
+    scaler = load(str(path_to_saved_scaler))
+
+    # Load ONNX model
+    model = rt.InferenceSession(str(path_to_saved_model), 
+                                providers = rt.get_available_providers())
+
+    return scaler, model
+
+
+def predict_with_onnx(dataset, scaler, model):
+
+    scaled_dataset              = scaler.transform(dataset)
+
+    # Get model input/output names
+    input_name                  = model.get_inputs()[0].name
+    output_name                 = model.get_outputs()[0].name
+
+    pred = model.run([output_name], {input_name: dataset})[0]
+
+    return pred
+
+def convert_tf_to_onnx(model):
+
+    model_onnx, _ = tf2onnx.convert.from_keras(model, input_signature=tuple(sig), opset=17)
+
+    return model_onnx
+
 class TrainEvaluatePreselNN:
     '''
     A class for training the multi-class classification neural network for preselecting phase space for SBI
     '''
-    def __init__(self, dataset, features, features_scaling):
+    def __init__(self, dataset, features, features_scaling, 
+                    train_labels_column = 'train_labels',
+                    weights_normed_column = 'weights_normed'):
         '''
         dataset: dataframe with the multiple classes for training
         num_classes: number of classes corresponding to the number of output nodes of softmax layer
         features: input features to use for training
         features_scaling: subset of input features to standardize before training
         '''
-        self.dataset = dataset
-        self.data_features_training = dataset[features].copy()
-        self.features = features
-        self.features_scaling = features_scaling
-        self.num_classes = len(np.unique(dataset.train_labels))
+        self.dataset                            = dataset
+        self.data_features_training             = dataset[features].copy()
+        self.features                           = features
+        self.features_scaling                   = features_scaling
+        self.num_classes                        = len(np.unique(dataset.train_labels))
+
+        self.train_labels_column                = train_labels_column
+        self.weights_normed_column              = weights_normed_column
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
     def train(self, test_size=0.15, 
@@ -70,11 +128,11 @@ class TrainEvaluatePreselNN:
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
-                                                                                    self.dataset['train_labels'], 
-                                                                                    self.dataset['weights_normed'], 
+                                                                                    self.dataset[self.train_labels_column], 
+                                                                                    self.dataset[self.weights_normed_column], 
                                                                                     test_size=test_size, 
                                                                                     random_state=random_state, 
-                                                                                    stratify=self.dataset['train_labels'])
+                                                                                    stratify=self.dataset[self.train_labels_column])
 
         # Standardize the input features
         self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.features_scaling)],remainder='passthrough')
@@ -109,44 +167,33 @@ class TrainEvaluatePreselNN:
 
         K.clear_session()
 
+        # Convert Keras model to ONNX
+        self.model                  = convert_tf_to_onnx(self.model)
+
         # Save the trained model if user provides with a path
         if path_to_save!='':
 
-            if not os.path.exists(path_to_save):
-                os.makedirs(path_to_save)
-    
-            model_json = self.model.to_json()
-            with open(path_to_save+"model_arch_presel.json", "w") as json_file:
-                json_file.write(model_json)
-    
-            # serialize weights to HDF5
-            self.model.save_weights(path_to_save+"model_weights_presel.weights.h5")
+            path_to_save      = Path(path_to_save)
+            path_to_save.mkdir(parents=True, exist_ok=True)
 
-            # Save the standard scaling
-            saved_scaler = path_to_save+"model_scaler_presel.bin"
-            dump(self.scaler, saved_scaler, compress=True)
+            path_to_model           = path_to_save / 'model_preselection.onnx'
+            path_to_scaler          = path_to_save / 'model_scaler_presel.bin'
+
+            save_model(self.model, path_to_model, self.scaler, path_to_scaler)
 
 
-    def get_trained_model(self, path_to_models):
+    def assign_trained_model(self, 
+                         path_to_models: str) -> None:
         '''
         Method to load the trained model
 
-        path_to_models: path to the directory with saved model config files
+        path_to_models: path to the directory with saved model and scaler files
         '''
-        json_file = open(path_to_models+'/model_arch_presel.json', "r")
 
-        loaded_model_json = json_file.read()
+        path_to_saved_scaler        = path_to_models + '/model_scaler_presel.bin'
+        path_to_saved_models        = path_to_models + '/model_preselection.onnx'
 
-        json_file.close()
-
-        self.model = model_from_json(loaded_model_json)
-
-        self.model.load_weights(path_to_models+'/model_weights_presel.weights.h5')
-
-        self.model.compile(loss='sparse_categorical_crossentropy', optimizer='nadam')
-
-        self.scaler = load(path_to_models+'/model_scaler_presel.bin')
-
+        self.scaler, self.model     = load_trained_model(path_to_saved_models, path_to_saved_scaler)
 
     def predict(self, dataset):
         '''
@@ -154,9 +201,9 @@ class TrainEvaluatePreselNN:
 
         dataset: the dataset to evaluate trained model on
         '''
-        features_scaled = self.scaler.transform(dataset[self.features])
-        pred_NN = self.model.predict(features_scaled, batch_size=10000)
-        K.clear_session()
+        pred                        = predict_with_onnx(dataset[self.features], 
+                                                        self.scaler, 
+                                                        self.model)
         
         return pred_NN
 
@@ -447,21 +494,16 @@ class TrainEvaluate_NN:
             K.clear_session()
         
             print("Finished Training")
-    
-            saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
-            print(saved_scaler)
-    
-            model_json = self.model_NN[ensemble_index].to_json()
-            with open(f"{self.path_to_models}model_arch{ensemble_index}.json", "w") as json_file:
-                json_file.write(model_json)
-    
-            # serialize weights to HDF5
-            self.model_NN[ensemble_index].save_weights(f"{self.path_to_models}model_weights{ensemble_index}.weights.h5")
+
+            path_to_saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
+
+            self._save_model(self.model_NN[ensemble_index], 
+                            f"{self.path_to_models}model{ensemble_index}.onnx",
+                             self.scaler[ensemble_index], 
+                             path_to_saved_scaler)
     
             np.save(f"{self.path_to_models}num_events_random_state_train_holdout_split{ensemble_index}.npy", 
                     np.array([holdout_num, rnd_seed]))
-    
-            dump(self.scaler[ensemble_index], saved_scaler, compress=True)
     
             plot_loss(self.history, path_to_figures=self.path_to_figures)
 
@@ -539,31 +581,6 @@ class TrainEvaluate_NN:
             if max_val == 1:
                 raise Warning(f"WARNING: {name} {training_holdout_label} data has max score = 1 for ensemble member {ensemble_index}, which may indicate numerical instability!")            
 
-
-
-    def get_trained_model(self, path_to_models, ensemble_index=''):
-        '''
-        Method to load the trained model
-
-        path_to_models: path to the directory with saved model config files
-        '''
-        json_file = open(path_to_models+f'/model_arch{ensemble_index}.json', "r")
-
-        loaded_model_json = json_file.read()
-
-        json_file.close()
-
-        model = model_from_json(loaded_model_json)
-
-        model.load_weights(path_to_models+f'/model_weights{ensemble_index}.weights.h5')
-
-        opt = tf.keras.optimizers.Nadam(learning_rate=0.1)
-
-        model.compile(loss='binary_crossentropy', optimizer=opt)
-
-        scaler = load(path_to_models+f'/model_scaler{ensemble_index}.bin')
-
-        return scaler, model
 
     
     def predict_with_model(self, data, ensemble_index = 0, use_log_loss=False):

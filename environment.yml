@@ -2,6 +2,11 @@ name: nsbi_env
 channels:
   - conda-forge
 dependencies:
+  - tf2onnx=1.16.1
+  - protobuf=3.20.3 
+  - onnx=1.17.0 
+  - onnxconverter-common=1.16.0 
+  - onnxruntime=1.19.2
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
   - _x86_64-microarch-level=4=2_zen4
