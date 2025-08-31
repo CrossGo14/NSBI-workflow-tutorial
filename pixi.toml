@@ -7,28 +7,27 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-python = "==3.12.11"
 
 [feature.gpu.system-requirements]
 cuda = "12.3" 
 
 [feature.gpu.dependencies]
-python = ">=3.12.11,<3.13"
-jax = ">=0.5.2,<0.6"
+python = "3.11.*"
+jax = "0.4.*"
 tf2onnx = ">=1.16.1,<2"
 scikit-learn = ">=1.7.1,<2"
 pytables = ">=3.10.2,<4"
 matplotlib-base = ">=3.10.5,<4"
 mplhep = ">=0.4.1,<0.5"
-numpy = ">=2.3.2,<3"
+numpy = "1.*"
 scipy = ">=1.16.1,<2"
 pandas = ">=2.3.2,<3"
 awkward = ">=2.8.7,<3"
 pixi-kernel = ">=0.6.6,<0.7"
-tensorflow-gpu = "2.18.*"
-cuda-version = "==12.6"
-cudnn = "9.*"
-onnxruntime = ">=1.22.0,<2"
+tensorflow-gpu = "2.17.*"
+cuda-version = "==12.5"
+cudnn = "8.9.*"
+onnxruntime = "1.18.*"
 uproot = ">=5.6.4,<6"
 
 [feature.gpu.pypi-dependencies]
