@@ -9,10 +9,6 @@ import pickle
 
 from pathlib import Path
 
-import tf2onnx
-import onnx
-import onnxruntime as rt
-
 from typing import Union, Dict
 import tensorflow as tf
 from tensorflow import keras
@@ -20,6 +16,11 @@ from tensorflow.keras.callbacks import EarlyStopping
 import tensorflow.keras.backend as K
 from tensorflow.keras import layers
 from tensorflow.keras.layers import Dense
+
+import tf2onnx
+import onnx
+import onnxruntime as rt
+
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer
@@ -48,7 +49,7 @@ def save_model(onnx_model_instance,
                     path_to_save_scaler: Union[str, Path]) -> None:
 
         # Save ONNX model
-        onnx.save_model(onnx_model, str(path_to_save_model))
+        onnx.save_model(onnx_model_instance, str(path_to_save_model))
 
         # Save the standardization scaler
         dump(scaler_instance, str(path_to_save_scaler), compress=True)
@@ -58,16 +59,29 @@ def load_trained_model(path_to_saved_model: Union[Path, str],
                         path_to_saved_scaler: Union[Path, str]):
 
     # Load scaler
-    scaler = load(str(path_to_saved_scaler))
+    scaler          = load(str(path_to_saved_scaler))
 
     # Load ONNX model
-    model = rt.InferenceSession(str(path_to_saved_model), 
-                                providers = rt.get_available_providers())
+    model           = onnx.load(str(path_to_saved_model))
 
     return scaler, model
 
 
-def predict_with_onnx(dataset, scaler, model):
+def predict_with_onnx(dataset, scaler, model, batch_size = 10_000):
+
+    sess_opts = rt.SessionOptions()
+    sess_opts.intra_op_num_threads = 1
+    sess_opts.inter_op_num_threads = 1
+
+    if isinstance(model, onnx.ModelProto):
+        model = rt.InferenceSession(model.SerializeToString(), 
+                                    sess_options = sess_opts,
+                                    providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+    
+    elif isinstance(model, rt.InferenceSession):
+        model = model
+    else:
+        raise TypeError(f"Unsupported model type: {type(model)}")
 
     scaled_dataset              = scaler.transform(dataset)
 
@@ -75,15 +89,43 @@ def predict_with_onnx(dataset, scaler, model):
     input_name                  = model.get_inputs()[0].name
     output_name                 = model.get_outputs()[0].name
 
-    pred = model.run([output_name], {input_name: dataset})[0]
+    preds = []
+    for i in range(0, len(scaled_dataset), batch_size):
+        batch       = scaled_dataset[i:i+batch_size]
+        pred        = model.run([output_name], {input_name: batch})[0]
+        preds.append(pred)
 
-    return pred
+    return np.concatenate(preds, axis=0)
 
-def convert_tf_to_onnx(model):
+def convert_tf_to_onnx(model, opset=17):
 
-    model_onnx, _ = tf2onnx.convert.from_keras(model, input_signature=tuple(sig), opset=17)
+    model.output_names      = [t.name.split(":")[0] for t in model.outputs]
 
+    # Build a TensorSpec for every model input
+    sig = []
+    for i, inp in enumerate(model.inputs):
+        shape = [d if d is not None else None for d in inp.shape]  # keep None for dynamic batch
+        dtype = inp.dtype
+        name = inp.name.split(":")[0] or f"input_{i}"
+        sig.append(tf.TensorSpec(shape=shape, dtype=dtype, name=name))
+
+    # Convert using that signature
+    model_onnx, _ = tf2onnx.convert.from_keras(
+        model,
+        input_signature=tuple(sig),
+        opset=opset
+    )
     return model_onnx
+
+    # model.output_names      = [t.name.split(":")[0] for t in model.outputs]
+
+    # input_dim               = model.input_shape[1]
+
+    # spec                    = (tf.TensorSpec([None, input_dim], tf.float32, name="input"),)
+
+    # model_onnx, _ = tf2onnx.convert.from_keras(model, input_signature=spec, opset=17)
+
+    # return model_onnx
 
 class TrainEvaluatePreselNN:
     '''
@@ -140,7 +182,7 @@ class TrainEvaluatePreselNN:
         X_val = self.scaler.transform(X_val)
         
         # Define the neural network model
-        self.model = keras.Sequential([
+        self.model = tf.keras.Sequential([
             layers.Input(shape=(self.data_features_training.shape[1],)),  # Input layer
             layers.Dense(1000, activation='swish'),
             layers.Dense(1000, activation='swish'),
@@ -205,7 +247,7 @@ class TrainEvaluatePreselNN:
                                                         self.scaler, 
                                                         self.model)
         
-        return pred_NN
+        return pred
 
         
 
@@ -245,6 +287,8 @@ class TrainEvaluate_NN:
         self.output_name = output_name
         self.use_log_loss = use_log_loss
         self.split_using_fold = split_using_fold
+
+        print("model wrong")
 
         # Initialize a list of models to train - if no ensemble, this is a 1 member list
         self.model_NN = [None]
@@ -433,7 +477,7 @@ class TrainEvaluate_NN:
         if load_trained_models:
 
             print(f"Reading saved models from {self.path_to_models}")
-            self.scaler[ensemble_index], self.model_NN[ensemble_index] = self.get_trained_model(self.path_to_models, 
+            self.scaler[ensemble_index], self.model_NN[ensemble_index] = get_trained_model(self.path_to_models, 
                                                                                                 ensemble_index = ensemble_index)
         # Else setup a new scaler
         else:
@@ -495,13 +539,16 @@ class TrainEvaluate_NN:
         
             print("Finished Training")
 
-            path_to_saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
+            # Convert Keras model to ONNX
+            self.model_NN[ensemble_index]                   = convert_tf_to_onnx(self.model_NN[ensemble_index])
 
-            self._save_model(self.model_NN[ensemble_index], 
-                            f"{self.path_to_models}model{ensemble_index}.onnx",
-                             self.scaler[ensemble_index], 
-                             path_to_saved_scaler)
+            path_to_saved_scaler        = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
+            path_to_saved_model         = f"{self.path_to_models}model{ensemble_index}.onnx"
+
+            save_model(self.model_NN[ensemble_index], path_to_saved_model,
+                        self.scaler[ensemble_index], path_to_saved_scaler)
     
+            # Save metadata
             np.save(f"{self.path_to_models}num_events_random_state_train_holdout_split{ensemble_index}.npy", 
                     np.array([holdout_num, rnd_seed]))
     
@@ -509,7 +556,8 @@ class TrainEvaluate_NN:
 
         
         # Do a first prediction without calibration layers
-        train_data_prediction = self.predict_with_model(data_train_full, ensemble_index = ensemble_index, 
+        train_data_prediction = self.predict_with_model(data_train_full, 
+                                                        ensemble_index = ensemble_index, 
                                                         use_log_loss = self.use_log_loss)
 
         # If calibrating, use the train_data_prediction for building histogram
@@ -589,11 +637,12 @@ class TrainEvaluate_NN:
 
         data: the dataset to evaluate trained model on
         '''
-        scaled_data = self.scaler[ensemble_index].transform(data[self.features])
-        pred = self.model_NN[ensemble_index].predict(scaled_data, 
-                                                     verbose=self.verbose, 
-                                                     batch_size=10_000)
-        pred = pred.reshape(pred.shape[0],)
+
+        print(f"model = {self.model_NN[ensemble_index]}")
+
+        pred = predict_with_onnx(data[self.features], 
+                                self.scaler[ensemble_index],
+                                self.model_NN[ensemble_index])
 
         if use_log_loss:
 
