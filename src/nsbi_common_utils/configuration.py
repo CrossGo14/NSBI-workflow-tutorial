@@ -158,14 +158,47 @@ class ConfigManager:
         return basis_samples
 
     def get_reference_samples(self):
-        basis_samples = []
+        reference_samples = []
         samples: list[dict[str, Any]] = self.config["Samples"]
         for count, sample in enumerate(samples):
             if sample.get("UseAsReference", False):
-                basis_samples.append(sample.get("Name"))
+                reference_samples.append(sample.get("Name"))
 
+        return reference_samples
+
+    def get_all_samples(self):
+        basis_samples = []
+        samples: list[dict[str, Any]] = self.config["Samples"]
+        for count, sample in enumerate(samples):
+            basis_samples.append(sample.get("Name"))
         return basis_samples
 
+    def get_samples_in_syst_for_training(self, systematic_name: str, direction: str) -> list:
+        systematics_list: list[dict[str, Any]] = self.config["Systematics"]
+        for systematics_dict in systematics_list:
+            if (systematics_dict["Type"] != "NormPlusShape") or (systematics_dict["Name"] != systematic_name):
+                continue
+            else:
+                dir_list_dict : list[dict[str, Any]] = systematics_dict.get(direction, [])
+                if len(dir_list_dict) == 0:
+                    return []
+                sample_list = []
+                for sample_dict in dir_list_dict:
+                    sample_name = sample_dict["SampleName"]
+                    sample_list.append(sample_name)
+                return sample_list
+                
+        
+    def get_channel_filters(self, channel_name: str) -> str:
+        
+        idx = self._index_of_region(channel_name = channel_name)
+
+        if idx is None:
+            log.info(f"Region {channel_name} not found in the config.")
+
+        filter_string = self.config["Regions"][idx]["Filter"]
+
+        return filter_string
 
     def _index_of_region(self, channel_name: str) -> Optional[int]:
         regions: list[dict[str, Any]] = self.config["Regions"]

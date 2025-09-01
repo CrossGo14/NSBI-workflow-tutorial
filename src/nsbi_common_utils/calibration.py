@@ -42,9 +42,7 @@ class HistogramCalibrator:
         data = np.hstack((data_num, data_den)).flatten()
         if histrange is None:
             hmin = np.min(data)
-            print(hmin)
             hmax = np.max(data)
-            print(hmax)
         else:
             hmin, hmax = histrange
 

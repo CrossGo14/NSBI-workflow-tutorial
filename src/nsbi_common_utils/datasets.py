@@ -5,14 +5,16 @@ import uproot
 import pathlib
 from typing import Any, Dict, List, Literal, Optional, Union
 
+from nsbi_common_utils.configuration import ConfigManager
 
 class datasets:
 
     def __init__(self, 
-                config, 
+                config_path: Union[pathlib.Path, str], 
                 branches_to_load: List):
 
-        self.config                     = config
+        self.config              = ConfigManager(file_path_string = config_path)
+        
         if len(branches_to_load) == 0:
             raise Exception(f"Empty branch list.")
         self.branches_to_load           = branches_to_load
@@ -24,7 +26,7 @@ class datasets:
         dict_datasets = {}
         dict_datasets["Nominal"] = {}
 
-        for dict_sample in self.config["Samples"]:
+        for dict_sample in self.config.config["Samples"]:
 
             weight_branch       = [dict_sample["Weight"]] if "Weight" in dict_sample.keys() else []
 
@@ -44,7 +46,7 @@ class datasets:
                 dict_datasets["Nominal"][sample_name]["weights"] = 1.0
 
         if load_systematics:
-            for dict_syst in self.config["Systematics"]:
+            for dict_syst in self.config.config["Systematics"]:
 
                 syst_name = dict_syst["Name"]
                 syst_type = dict_syst["Type"]
@@ -91,7 +93,7 @@ class datasets:
                     dict_datasets,
                     save_systematics = False):
 
-        for dict_sample in self.config["Samples"]:
+        for dict_sample in self.config.config["Samples"]:
 
             path_to_root_file   = dict_sample["SamplePath"]
             tree_name           = dict_sample["Tree"]
@@ -101,7 +103,7 @@ class datasets:
                                 tree_name)
 
         if save_systematics:
-            for dict_syst in self.config["Systematics"]:
+            for dict_syst in self.config.config["Systematics"]:
 
                 syst_name = dict_syst["Name"]
                 syst_type = dict_syst["Type"]
@@ -143,6 +145,24 @@ class datasets:
             fout[tree_name] = dataset
 
         os.replace(tmp_path, path_to_root_file)
+
+    def filter_region_by_type(self,
+                             dataset: Dict[str, Dict[str, pd.DataFrame]],
+                             region: str) -> Dict[str, Dict[str, pd.DataFrame]]:
+
+        for type_name, type_dict in dataset.items():
+            dataset[type_name] = self.filter_region_dataset(type_dict, region = region)
+
+        return dataset
+
+    def filter_region_dataset(self,
+                              dataset: Dict[str, pd.DataFrame],
+                              region: str) -> Dict[str, pd.DataFrame]:
+
+        region_filters = self.config.get_channel_filters(channel_name = region)
+        for sample_name, sample_dataframe in dataset.items():
+            dataset[sample_name] = sample_dataframe.query(region_filters).copy()
+        return dataset
 
     def merge_dataframe_dict_for_training(self, 
                                         dataset_dict, 

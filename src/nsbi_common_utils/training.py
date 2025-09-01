@@ -95,7 +95,9 @@ def predict_with_onnx(dataset, scaler, model, batch_size = 10_000):
         pred        = model.run([output_name], {input_name: batch})[0]
         preds.append(pred)
 
-    return np.concatenate(preds, axis=0)
+    final_pred = np.concatenate(preds, axis=0)
+
+    return final_pred
 
 def convert_tf_to_onnx(model, opset=17):
 
@@ -288,8 +290,6 @@ class TrainEvaluate_NN:
         self.use_log_loss = use_log_loss
         self.split_using_fold = split_using_fold
 
-        print("model wrong")
-
         # Initialize a list of models to train - if no ensemble, this is a 1 member list
         self.model_NN = [None]
         self.scaler = [None]
@@ -359,7 +359,7 @@ class TrainEvaluate_NN:
         for ensemble_index in range(num_ensemble_members):
 
             if load_trained_models:
-                if os.path.exists(f"{self.path_to_models}/model_weights{ensemble_index}.weights.h5"):
+                if os.path.exists(f"{self.path_to_models}/model{ensemble_index}.onnx"):
                     print(f"Loading existing model for ensemble member {ensemble_index}")
                     load_trained_models_ensemble_member = True
                 else:
@@ -476,9 +476,12 @@ class TrainEvaluate_NN:
         # Load pre-trained models and scaling
         if load_trained_models:
 
+            path_to_saved_scaler        = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
+            path_to_saved_model         = f"{self.path_to_models}model{ensemble_index}.onnx"
+
             print(f"Reading saved models from {self.path_to_models}")
-            self.scaler[ensemble_index], self.model_NN[ensemble_index] = get_trained_model(self.path_to_models, 
-                                                                                                ensemble_index = ensemble_index)
+            self.scaler[ensemble_index], self.model_NN[ensemble_index] = load_trained_model(path_to_saved_model, path_to_saved_scaler)
+            
         # Else setup a new scaler
         else:
 
@@ -643,6 +646,8 @@ class TrainEvaluate_NN:
         pred = predict_with_onnx(data[self.features], 
                                 self.scaler[ensemble_index],
                                 self.model_NN[ensemble_index])
+        
+        pred = pred.reshape(pred.shape[0],)
 
         if use_log_loss:
 
