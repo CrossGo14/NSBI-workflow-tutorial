@@ -33,7 +33,10 @@ class datasets:
             path_to_root_file   = dict_sample["SamplePath"]
             tree_name           = dict_sample["Tree"]
             sample_name         = dict_sample["Name"]
-            branches_to_load = self.branches_to_load + weight_branch
+            branches_to_load    = self.branches_to_load
+            if weight_branch[0] not in branches_to_load:
+                branches_to_load += weight_branch
+                
             dict_datasets["Nominal"][sample_name] = self._load_dataset(path_to_root_file, 
                                                                     tree_name, 
                                                                     branches_to_load)
@@ -59,7 +62,9 @@ class datasets:
                             sample_name         = dict_sample["SampleName"]
                             tree_name           = dict_sample["Tree"]
                             weight_branch       = [dict_sample["Weight"]] if "Weight" in dict_sample.keys() else []
-                            branches_to_load = self.branches_to_load + weight_branch
+                            branches_to_load    = self.branches_to_load
+                            if weight_branch[0] not in branches_to_load:
+                                branches_to_load += weight_branch
                             dict_datasets[syst_name_var][sample_name] = self._load_dataset(path_to_root_file, 
                                                                                     tree_name, 
                                                                                     branches_to_load)

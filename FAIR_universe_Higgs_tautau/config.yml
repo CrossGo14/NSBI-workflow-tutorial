@@ -150,34 +150,42 @@ Regions:
     Type: unbinned
     Binning: null
     TrainedModels:
-        - Nominal       :
-            -   SampleName: htautau
-                Models: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_nominal/output_model_params_htautau/
-            -   SampleName: ttbar
-                Models: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_nominal/output_model_params_ttbar/
-            -   SampleName: ztautau
-                Models: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_nominal/output_model_params_ztautau/
-        - Systematics       :
-            -   SystName: TES
-            -   Samples         :
-                -   SampleName: htautau
-                    ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_htautau_TES_Up/
-                    ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_htautau_TES_Dn/
-                -   SampleName: ztautau
-                    ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ztautau_TES_Up/
-                    ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ztautau_TES_Dn/
-                -   SampleName: ttbar
-                    ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ttbar_TES_Up/
-                    ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ttbar_TES_Dn/
-            -   SystName: JES
-            -   Samples         :
-                -   SampleName: htautau
-                    ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_htautau_JES_Up/
-                    ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_htautau_JES_Dn/
-                -   SampleName: ztautau
-                    ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ztautau_JES_Up/
-                    ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ztautau_JES_Dn/
-                -   SampleName: ttbar
-                    ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ttbar_JES_Up/
-                    ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ttbar_JES_Dn/
+        - SampleName    : htautau
+          Nominal       : /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_nominal/output_model_params_htautau/
+          Systematics    :
 
+                 - SystName: TES
+                   ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_htautau_TES_Up/
+                   ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_htautau_TES_Dn/
+
+                - SystName: JES
+                   ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_htautau_JES_Up/
+                   ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_htautau_JES_Dn/
+
+        - SampleName    : ttbar
+          Nominal       : /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_nominal/output_model_params_ttbar/
+          Systematics    :
+        
+             - SystName: TES
+               ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ttbar_TES_Up/
+               ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ttbar_TES_Dn/
+
+               - SystName: JES
+                 ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ttbar_JES_Up/
+                 ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ttbar_JES_Dn/
+                           
+        - SampleName    : ztautau
+          Nominal       : /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_nominal/output_model_params_ztautau/
+          Systematics    :
+        
+             - SystName: TES
+               ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ztautau_TES_Up/
+               ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ztautau_TES_Dn/
+
+               - SystName: JES
+                 ModelsUp: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ztautau_JES_Up/
+                 ModelsDn: /home/jsandesara_umass_edu/NSBI-workflow-tutorial/FAIR_universe_Higgs_tautau/saved_data/output_training_systematics/output_model_params_ztautau_JES_Dn/
+                           
+
+                 
+        

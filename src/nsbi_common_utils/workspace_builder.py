@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 from collections.abc import Callable as CABC
 import pathlib
+from typing import Union, Dict, Any, List
+import nsbi_common_utils
 from nsbi_common_utils import configuration, datasets
 
 class WorkspaceBuilder:
@@ -11,7 +13,7 @@ class WorkspaceBuilder:
     def __init__(self, config_path: Union[pathlib.Path, str]) -> None:
         """Creates a workspace corresponding to configuration file"""
         self.config_path = config_path
-        self.config = nsbi_common_utils.configuration(file_path_string = config_path)
+        self.config = nsbi_common_utils.configuration.ConfigManager(file_path_string = config_path)
         self.config_dict = self.config.config
 
     def normfactor_modifiers(self, 
@@ -40,7 +42,7 @@ class WorkspaceBuilder:
         return modifiers
 
     def normplusshape_modifiers(self, 
-                                dataset           : pd.DataFrane, 
+                                dataset           : pd.DataFrame, 
                                 region            : dict[str, Any], 
                                 sample            : dict[str, Any], 
                                 systematic_dict   : dict[str, Any],
@@ -51,15 +53,16 @@ class WorkspaceBuilder:
         channel_name    = region["Name"]
         sample_name     = sample["Name"]
         sample_path     = sample["SamplePath"]
-        region_variable = region[""]
+        region_variable = region["Variable"]
+        region_binning = region["Binning"]
 
         variation_data = {}
-        
+
         for direction in ["Up", "Dn"]:
 
             key_syst            = syst_name + '_' + direction
             
-            weights             = dataset[key_syst]["weights"].to_numpy()
+            weights             = dataset[key_syst][sample_name]["weights"].to_numpy()
             
             feature_var         = np.clip(dataset[key_syst][sample_name][region_variable],
                                                           np.amin(region_binning), np.amax(region_binning))
@@ -70,8 +73,8 @@ class WorkspaceBuilder:
         
         modifiers = [{"name": syst_name,
                       "type": "histosys",
-                      "data": {"hi_data": variation_data["Up"],
-                               "lo_data": variation_data["Dn"]}}]
+                      "data": {"hi_data": list(variation_data["Up"]),
+                               "lo_data": list(variation_data["Dn"])}}]
 
         return modifiers
 
@@ -80,8 +83,9 @@ class WorkspaceBuilder:
                       sample: dict[str, Any],
                       nominal_data) -> list[dict[str, Any]]:
 
+        sample_name = sample["Name"]
         modifiers = []
-        for systematic_dict in self.config.get("Systematics", []):
+        for systematic_dict in self.config_dict.get("Systematics", []):
             syst_name = systematic_dict["Name"]
             syst_type = systematic_dict["Type"]
 
@@ -94,7 +98,7 @@ class WorkspaceBuilder:
                 if sample_name not in samples_affected:
                     continue
                 else:
-                    if systematic["Type"] == "NormPlusShape":
+                    if systematic_dict["Type"] == "NormPlusShape":
                         modifiers += self.normplusshape_modifiers(
                             dataset, region, sample, systematic_dict, nominal_data
                         )
@@ -124,6 +128,7 @@ class WorkspaceBuilder:
                 type_of_fit  = "unbinned"
             channel.update({"type": type_of_fit})
             if type_of_fit == "binned":
+                
                 region_binning      = np.array(region["Binning"])
                 region_variable     = region["Variable"]
                 region_filters      = region["Filter"]
@@ -139,26 +144,26 @@ class WorkspaceBuilder:
                     
                     sample_path     = sample_dict["SamplePath"]
                     weight_var      = sample_dict.get("Weight", None)
-                    branches_to_load_sample  = branches_to_load
+                    branches_to_load_sample  = branches_to_load.copy()
                     if weight_var is not None:
                         branches_to_load_sample.append(weight_var)
-                        
-                    datasets            = nsbi_common_utils.dataset.dataset(self.config_path,
+
+                    datasets            = nsbi_common_utils.datasets.datasets(self.config_path,
                                                                         branches_to_load =  branches_to_load_sample)
-                    datasets_incl       = datasets.load_datasets_from_config(load_systematics = False)
+                    datasets_incl       = datasets.load_datasets_from_config(load_systematics = True)
                     dataset_region_dict = datasets.filter_region_by_type(datasets_incl, 
                                                                          region = channel_name)
 
                     feature_var         = np.clip(dataset_region_dict["Nominal"][sample_name][region_variable],
                                                   np.amin(region_binning), np.amax(region_binning))
                     if weight_var is not None:
-                        weights = dataset_region_dict["Nominal"][weight_var].to_numpy()
+                        weights = dataset_region_dict["Nominal"][sample_name][weight_var].to_numpy()
                     else:
                         weights = np.ones_like(feature_var)
                         
                     sample_data, _       = np.histogram(feature_var, weights = weights, bins = region_binning)
 
-                    current_sample.update({"data": sample_data})
+                    current_sample.update({"data": list(sample_data)})
  
                     modifiers = []
 
@@ -172,10 +177,24 @@ class WorkspaceBuilder:
                     sys_modifier_list = self.sys_modifiers(dataset_region_dict, region, sample_dict, sample_data)
                     modifiers += sys_modifier_list
 
-                    current_sample.update({"modifiers": modifiers})                    
+                    current_sample.update({"modifiers": modifiers})  
+
+                    samples.append(current_sample)
+
+            elif type_of_fit == "unbinned":
+
+                region_variable                              = region["Filter"]
+                region_models_nominal: list[dict, Any]       = region["TrainedModels"]["Nominal"]
+                region_models_systematics: list[dict, Any]   = region["TrainedModels"]["Systematics"]
+                
+                for sample_dict in region_models_nominal:
+
+                    
                 
             channel.update({"samples": samples})
             channels.append(channel)
+
+            
             
         return channels
 
@@ -183,12 +202,12 @@ class WorkspaceBuilder:
         
         measurements = []
         measurement = {}
-        measurement.update({"name": self.config["General"]["Measurement"]})
+        measurement.update({"name": self.config_dict["General"]["Measurement"]})
         config_dict = {}
 
         # get the norm factor initial values / bounds / constant setting
         parameters_list = []
-        for nf in self.config.get("NormFactors", []):
+        for nf in self.config_dict.get("NormFactors", []):
             nf_name = nf["Name"]  # every NormFactor has a name
             init = nf.get("Nominal", None)
             bounds = nf.get("Bounds", None)
@@ -201,7 +220,7 @@ class WorkspaceBuilder:
 
             parameters_list.append(parameter)
 
-        for sys in self.config.get("Systematics", []):
+        for sys in self.config_dict.get("Systematics", []):
             # when there are many more systematics than NormFactors, it would be more
             # efficient to loop over fixed parameters and exclude all NormFactor related
             # ones to set all the remaining ones to constant (which are systematics)
@@ -210,7 +229,7 @@ class WorkspaceBuilder:
         parameters = {"parameters": parameters_list}
         config_dict.update(parameters)
         # POI defaults to "" (interpreted as "no POI" by pyhf) if not specified
-        config_dict.update({"poi": self.config["General"].get("POI", "")})
+        config_dict.update({"poi": self.config_dict["General"].get("POI", "")})
         measurement.update({"config": config_dict})
         measurements.append(measurement)
         return measurements
@@ -242,101 +261,6 @@ class WorkspaceBuilder:
 
         return ws
 
-    def add_systematic(
-        self,
-        channel: str,
-        sample: str,
-        name: str,
-        typ: str,
-        data: str,
-        expr: str = "lam"
-    ):
-        """
-        Register one modifier for one sample in one channel.
-        `data` can be
-          – a numpy array / list of per‑bin shifts,
-          – OR a callable(nominal_bin_array)→array.
-        """
-        self._systematics\
-            .setdefault(channel, {})\
-            .setdefault(sample, [])\
-            .append({
-                "name": name,
-                "typ": typ,
-                "data": data,
-                "expr": expr
-            })
-
-    def build_histogram_channel(
-        self,
-        hists: dict[str, np.ndarray],
-        data: np.ndarray,
-        channel: str = "SR",
-    ):
-        """
-        Turn a { sample: hist_array } dict into a pyhf‐style channel JSON,
-        picking up any systematics previously added with add_systematic().
-        """
-        ch = {
-            "name": channel,
-            "samples": []
-        }
-
-        # loop over every sample you gave me
-        for samp, vals in hists.items():
-            sample_dict = {
-                "name": samp,
-                "data": vals.tolist(),
-                "modifiers": []
-            }
-
-            # see if the user registered any systematics for this (channel, sample)
-            for mod in self._systematics.get(channel, {}).get(samp, []):
-                # evaluate the .data if it's a function
-                raw = mod["data"]
-                if callable(raw):
-                    raw = raw(vals)
-                # make sure it ends up as a Python list in the JSON
-                sample_dict["modifiers"].append({
-                    "name": mod["name"],
-                    "typ": mod["typ"],
-                    "data": (raw.tolist() if isinstance(raw, np.ndarray)
-                             else raw),
-                    "expr": mod["expr"]
-                })
-
-            ch["samples"].append(sample_dict)
-
-        # store it
-        self.channel_specs.append(ch)
-        self.observations.append({
-            "name": channel,
-            "data": data.tolist()
-        })
-
-    def build_workspace(
-        self,
-        list_of_pois,
-        list_of_unconstrained_nps,
-        list_of_constrained_nps,
-        initial_values
-    ):
-        return {
-            "version":       self.version,
-            "channels":      self.channel_specs,
-            "observations":  self.observations,
-            "measurements": [
-                {
-                    "name":    "measurement",
-                    "config": {
-                        "pois":                            list_of_pois,
-                        "unconstrained_nuisance_parameters": list_of_unconstrained_nps,
-                        "constrained_nuisance_parameters":   list_of_constrained_nps,
-                        "inits":                            initial_values
-                    }
-                }
-            ]
-        }
 
     def dump_workspace(self, ws: dict, outpath: str = "workspace.json"):
         with open(outpath, "w") as f:
