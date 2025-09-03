@@ -187,7 +187,7 @@ class ConfigManager:
                     sample_name = sample_dict["SampleName"]
                     sample_list.append(sample_name)
                 return sample_list
-                
+
         
     def get_channel_filters(self, channel_name: str) -> str:
         
