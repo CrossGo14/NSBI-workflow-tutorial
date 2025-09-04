@@ -46,7 +46,8 @@ class WorkspaceBuilder:
                                 region            : dict[str, Any], 
                                 sample            : dict[str, Any], 
                                 systematic_dict   : dict[str, Any],
-                                nominal_data      : np.array):
+                                nominal_data      : np.array,
+                                type_of_fit: str) -> list[dict[str, Any]]:
 
         syst_name                      = systematic_dict["Name"]
         
@@ -54,7 +55,7 @@ class WorkspaceBuilder:
         sample_name     = sample["Name"]
         sample_path     = sample["SamplePath"]
         region_variable = region["Variable"]
-        region_binning = region["Binning"]
+        region_binning  = region["Binning"]
 
         variation_data = {}
 
@@ -70,24 +71,39 @@ class WorkspaceBuilder:
             syst_var_data, _       = np.histogram(feature_var, weights = weights, bins = region_binning)
 
             variation_data[direction] = syst_var_data / nominal_data
+
+        if type_of_fit == "binned":
         
-        modifiers = [{"name": syst_name,
-                      "type": "histosys",
-                      "data": {"hi_data": list(variation_data["Up"]),
-                               "lo_data": list(variation_data["Dn"])}}]
+            modifiers = [{"name": syst_name,
+                          "type": "normplusshape",
+                          "data": {"hi_data": list(variation_data["Up"]),
+                                   "lo_data": list(variation_data["Dn"])}}]
+        elif type_of_fit == "unbinned":
+
+            idx      = self.config.get_sample_index_unbinned_regions(channel_name, sample_name)
+            syst_idx = self.config.get_syst_index_unbinned_regions(channel_name, sample_name, syst_name)
+
+            variation_ratio_up         = region["TrainedModels"][idx]["Systematics"][syst_idx].get("RatiosUp", None)
+            variation_ratio_dn         = region["TrainedModels"][idx]["Systematics"][syst_idx].get("RatiosDn", None)
+            modifiers = [{"name": syst_name,
+                          "type": "normplusshape",
+                          "data": {"hi_data": list(variation_data["Up"]),
+                                   "hi_ratio": variation_ratio_up,
+                                   "lo_data": list(variation_data["Dn"]),
+                                   "lo_ratio": variation_ratio_dn}
+                         }]
 
         return modifiers
 
     def sys_modifiers(self, dataset: pd.DataFrame, 
                       region: dict[str, Any], 
                       sample: dict[str, Any],
-                      nominal_data) -> list[dict[str, Any]]:
+                      nominal_data: np.array, 
+                      type_of_fit: str = "binned") -> list[dict[str, Any]]:
 
         sample_name = sample["Name"]
         modifiers = []
         for systematic_dict in self.config_dict.get("Systematics", []):
-            syst_name = systematic_dict["Name"]
-            syst_type = systematic_dict["Type"]
 
             regions_affected = systematic_dict.get("Regions", None)
             if regions_affected is not None:
@@ -100,7 +116,7 @@ class WorkspaceBuilder:
                 else:
                     if systematic_dict["Type"] == "NormPlusShape":
                         modifiers += self.normplusshape_modifiers(
-                            dataset, region, sample, systematic_dict, nominal_data
+                            dataset, region, sample, systematic_dict, nominal_data, type_of_fit
                         )
                     else:
                         raise NotImplementedError(
@@ -122,79 +138,89 @@ class WorkspaceBuilder:
             channel_type = region["Type"]
             channel.update({"name": channel_name,
                             "type": channel_type})
-            if region.get("Variable", None) is not None:
-                type_of_fit  = "binned"
-            else:
-                type_of_fit  = "unbinned"
-            channel.update({"type": type_of_fit})
-            if type_of_fit == "binned":
-                
-                region_binning      = np.array(region["Binning"])
-                region_variable     = region["Variable"]
-                region_filters      = region["Filter"]
-                branches_to_load    = [region_variable] 
-                
-                samples = []
-                for sample_dict in self.config_dict["Samples"]:
+            type_of_fit  = channel_type
 
-                    current_sample = {}
+            if type_of_fit == "unbinned":
+                region_weights: str = region.get("AsimovWeights", None)
+                if region_weights is not None:
+                    channel.update({"weights" : region_weights})
+                
+            region_binning      = region.get("Binning", None)
+            region_variable     = region.get("Variable", None)
+                
+            region_filters      = region["Filter"]
+            if region_variable is None:
+                region_variable = self.config.get_training_features()[0][0] # Bin any random variable in a single bin for total event yield calculation
+                region["Variable"] =  region_variable
+                
+            branches_to_load    = [region_variable] 
+            if region_variable != 'presel_score':
+                branches_to_load += ['presel_score'] # Hard coded for now - TODO
+                
+            samples = []
+            for sample_dict in self.config_dict["Samples"]:
+
+                current_sample = {}
+                
+                sample_name     = sample_dict["Name"]
+                current_sample.update({"name": sample_name})
+                
+                sample_path     = sample_dict["SamplePath"]
+                branches_to_load_sample  = branches_to_load.copy()
+
+                datasets            = nsbi_common_utils.datasets.datasets(self.config_path,
+                                                                    branches_to_load =  branches_to_load_sample)
+                datasets_incl       = datasets.load_datasets_from_config(load_systematics = True)
+                dataset_region_dict = datasets.filter_region_by_type(datasets_incl, 
+                                                                     region = channel_name)
+
+                dataset_nominal_sample = dataset_region_dict["Nominal"][sample_name].copy()
+                
+                if region_binning is None:
+                    feature_arr_tmp = dataset_nominal_sample[region_variable]
+                    region_binning = np.linspace(np.amin(feature_arr_tmp), np.amax(feature_arr_tmp), num=2) # Dummy binning for a single event yield calculation in unbinned region
+                    region["Binning"] =  region_binning
                     
-                    sample_name     = sample_dict["Name"]
-                    current_sample.update({"name": sample_name})
-                    
-                    sample_path     = sample_dict["SamplePath"]
-                    weight_var      = sample_dict.get("Weight", None)
-                    branches_to_load_sample  = branches_to_load.copy()
-                    if weight_var is not None:
-                        branches_to_load_sample.append(weight_var)
-
-                    datasets            = nsbi_common_utils.datasets.datasets(self.config_path,
-                                                                        branches_to_load =  branches_to_load_sample)
-                    datasets_incl       = datasets.load_datasets_from_config(load_systematics = True)
-                    dataset_region_dict = datasets.filter_region_by_type(datasets_incl, 
-                                                                         region = channel_name)
-
-                    feature_var         = np.clip(dataset_region_dict["Nominal"][sample_name][region_variable],
-                                                  np.amin(region_binning), np.amax(region_binning))
-                    if weight_var is not None:
-                        weights = dataset_region_dict["Nominal"][sample_name][weight_var].to_numpy()
-                    else:
-                        weights = np.ones_like(feature_var)
-                        
-                    sample_data, _       = np.histogram(feature_var, weights = weights, bins = region_binning)
-
-                    current_sample.update({"data": list(sample_data)})
- 
-                    modifiers = []
-
-                    # modifiers can have region and sample dependence, which is checked
-                    # check if normfactors affect sample in region, add modifiers as needed
-                    nf_modifier_list = self.normfactor_modifiers(channel_name, sample_name)
-
-                    modifiers += nf_modifier_list
-
-                    # check if systematics affect sample in region, add modifiers as needed
-                    sys_modifier_list = self.sys_modifiers(dataset_region_dict, region, sample_dict, sample_data)
-                    modifiers += sys_modifier_list
-
-                    current_sample.update({"modifiers": modifiers})  
-
-                    samples.append(current_sample)
-
-            elif type_of_fit == "unbinned":
-
-                region_variable                              = region["Filter"]
-                region_models_nominal: list[dict, Any]       = region["TrainedModels"]["Nominal"]
-                region_models_systematics: list[dict, Any]   = region["TrainedModels"]["Systematics"]
+                feature_var         = np.clip(dataset_nominal_sample[region_variable],
+                                              np.amin(region_binning), np.amax(region_binning))
                 
-                for sample_dict in region_models_nominal:
+                weights = dataset_region_dict["Nominal"][sample_name]["weights"].to_numpy()
+                    
+                sample_data, _       = np.histogram(feature_var, weights = weights, bins = region_binning)
 
+                current_sample.update({"data": list(sample_data)})
+
+                if type_of_fit == "unbinned":
+
+                    idx = self.config.get_sample_index_unbinned_regions(channel_name, sample_name)
+                    
+                    nominal_ratios         = region["TrainedModels"][idx]["Nominal"].get("Ratios", None)
+                    if nominal_ratios is None:
+                        # Load the model and evaluate ratios - TODO
+                        nominal_model         = region["TrainedModels"][idx]["Nominal"].get("Models", None)
+
+                    current_sample.update({"ratios": nominal_ratios})
+
+                modifiers = []
+
+                # modifiers can have region and sample dependence, which is checked
+                # check if normfactors affect sample in region, add modifiers as needed
+                nf_modifier_list = self.normfactor_modifiers(channel_name, sample_name)
+
+                modifiers += nf_modifier_list
+
+                # check if systematics affect sample in region, add modifiers as needed
+                sys_modifier_list = self.sys_modifiers(dataset_region_dict, region, sample_dict, sample_data, type_of_fit = type_of_fit)
+                modifiers += sys_modifier_list
+
+                current_sample.update({"modifiers": modifiers})  
+
+                samples.append(current_sample)
                     
                 
             channel.update({"samples": samples})
             channels.append(channel)
 
-            
             
         return channels
 

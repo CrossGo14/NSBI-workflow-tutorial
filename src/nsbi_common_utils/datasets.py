@@ -37,9 +37,9 @@ class datasets:
             if weight_branch[0] not in branches_to_load:
                 branches_to_load += weight_branch
                 
-            dict_datasets["Nominal"][sample_name] = self._load_dataset(path_to_root_file, 
-                                                                    tree_name, 
-                                                                    branches_to_load)
+            dict_datasets["Nominal"][sample_name] = load_dataframe_from_root(path_to_root_file, 
+                                                                            tree_name, 
+                                                                            branches_to_load)
 
             dict_datasets["Nominal"][sample_name]["sample_name"] = sample_name
 
@@ -65,9 +65,9 @@ class datasets:
                             branches_to_load    = self.branches_to_load
                             if weight_branch[0] not in branches_to_load:
                                 branches_to_load += weight_branch
-                            dict_datasets[syst_name_var][sample_name] = self._load_dataset(path_to_root_file, 
-                                                                                    tree_name, 
-                                                                                    branches_to_load)
+                            dict_datasets[syst_name_var][sample_name] = load_dataframe_from_root(path_to_root_file, 
+                                                                                                tree_name, 
+                                                                                                branches_to_load)
 
                             dict_datasets[syst_name_var][sample_name]["sample_name"] = sample_name
 
@@ -77,16 +77,6 @@ class datasets:
                                 dict_datasets[syst_name_var][sample_name]["weights"] = 1.0
 
         return dict_datasets
-
-    def _load_dataset(self,
-                    path_to_root_file  : str,
-                    tree_name         : str,
-                    branches_to_load  : list):
-
-        with uproot.open(f"{path_to_root_file}:{tree_name}") as tree:
-            dataframe = tree.arrays(branches_to_load, library="pd")
-
-        return dataframe
 
     def add_appended_branches(self, 
                               branches: List):
@@ -171,7 +161,7 @@ class datasets:
 
     def merge_dataframe_dict_for_training(self, 
                                         dataset_dict, 
-                                        label_sample_dict: dict[str, int],
+                                        label_sample_dict: Union[dict[str, int], None] = None,
                                         samples_to_merge = []):
 
         if len(samples_to_merge) == 0:
@@ -184,8 +174,10 @@ class datasets:
 
         dataset = pd.concat(list_dataframes)
 
-        dataset = self._add_normalised_weights_and_train_label_class(dataset, 
-                                                                    label_sample_dict)
+        if label_sample_dict is not None:
+
+            dataset = self._add_normalised_weights_and_train_label_class(dataset, 
+                                                                        label_sample_dict)
 
         return dataset
 
@@ -215,4 +207,22 @@ class datasets:
         return dataset
 
 
+def save_dataframe_as_root(dataset        : pd.DataFrame,
+                           path_to_save   : str,
+                           tree_name      : str) -> None:
 
+    with uproot.recreate(f"{path_to_save}") as ntuple:
+
+        arrays = {col: dataset[col].to_numpy() for col in dataset.columns}
+
+        ntuple[tree_name] = arrays
+        
+
+def load_dataframe_from_root(path_to_load      : str,
+                           tree_name         : str,
+                           branches_to_load  : list) -> pd.DataFrame:
+
+    with uproot.open(f"{path_to_load}:{tree_name}") as tree:
+            dataframe = tree.arrays(branches_to_load, library="pd")
+
+    return dataframe

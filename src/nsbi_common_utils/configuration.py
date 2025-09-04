@@ -36,6 +36,43 @@ class ConfigManager:
 
         self.validate(self.config)
 
+    def get_sample_index_unbinned_regions(self,
+                                          region_name: str,
+                                          sample_name: str) -> Union[int, None]:
+
+        idx = self._index_of_region(channel_name = region_name)
+
+        if idx is None:
+            log.info(f"Region {channel_name} not found in the config.")
+
+        list_dict_trained_models: list[dict[str, Any]] = self.config["Regions"][idx]["TrainedModels"]
+        for count, sample_model in enumerate(list_dict_trained_models):
+            if sample_model.get("SampleName") == sample_name:
+                return count
+        return None
+
+    def get_syst_index_unbinned_regions(self,
+                                          region_name: str,
+                                          sample_name: str,
+                                         syst_name: str) -> Union[int, None]:
+
+        idx = self._index_of_region(channel_name = region_name)
+
+        if idx is None:
+            log.info(f"Region {channel_name} not found in the config.")
+
+        list_dict_trained_models: list[dict[str, Any]] = self.config["Regions"][idx]["TrainedModels"]
+
+        idx_sample = self.get_sample_index_unbinned_regions(region_name, sample_name)
+
+        list_dict_systematics: list[dict[str, Any]] = self.config["Regions"][idx]["TrainedModels"][idx_sample]["Systematics"]
+        
+        for count, syst_model in enumerate(list_dict_systematics):
+            if syst_model.get("SystName") == syst_name:
+                return count
+        return None
+
+        
     def get_training_features(self):
 
         return self.config['TrainingFeatures'], self.config['TrainingFeaturesToStandardize']
