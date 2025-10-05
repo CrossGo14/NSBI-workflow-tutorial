@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
@@ -32,6 +31,10 @@ class Model:
             self.list_parameters_types                  = self._get_parameters()
         
         self.list_syst_normplusshape                    = self._get_list_syst_for_interp() 
+        self.list_normfactors, self.norm_sample_map     = self._get_norm_factors() 
+
+        self.index_normparam_map: Dict[str, list[str]]  = self._make_map_index_norm()
+
 
         self.yield_array_dict, _                        = self._get_nominal_expected_arrays(type = "binned")
         self.unbinned_total_dict, \
@@ -47,6 +50,21 @@ class Model:
                 self.combined_tot_up_unbinned, \
                     self.combined_tot_dn_unbinned       = self._get_systematic_data(type="unbinned")
 
+    def _get_norm_factors(self):
+        """Assume same normfactor across channels for now (TODO: Add support for normfactor per channel)"""
+        dict_sample_normfactors = {sample_name: [] for sample_name in self.all_samples}
+        for channel in self.all_channels[:1]:
+            channel_index = self._index_of_region(channel_name=channel)
+            for sample in self.all_samples:
+                sample_index = self._index_of_samples(channel_name=channel, sample_name=sample)
+                modifier_list = self.workspace["channels"][channel_index]["samples"][sample_index]["modifiers"]
+                for modifier in modifier_list:
+                    if modifier["type"] == "normfactor":
+                        modifier_name = modifier["name"]
+                        if modifier_name in dict_sample_normfactors[sample]: continue
+                        dict_sample_normfactors[sample].append(modifier_name)
+
+        return dict_sample_normfactors
 
     def _get_list_syst_for_interp(self):
         """Get the list of subset of systematics that need interpolation."""
@@ -103,22 +121,20 @@ class Model:
                         list_param_names.append(modifier_name)
                         list_param_types.append(modifier_type)
         return list_param_names, list_param_types
-                
+    
+    @jax.jit
+    def calculate_parameterized_yields(self, param_vec, hist_yields, hist_vars):
 
-    def model(self, param_array):
-        """
-        Output model to pass onto inference algorithms
-        """
-        param_array_interpolation           = param_vec[self.num_unconstrained_params:]
-        nll                                 = self.nll_function(param_array, 
-                                                                param_array_interpolation,
-                                                                self.combined_var_up_binned,
-                                                                self.combined_var_dn_binned  ,
-                                                                self.combined_var_up_unbinned,
-                                                                self.combined_var_dn_unbinned,
-                                                                self.combined_tot_up_unbinned,
-                                                                self.combined_tot_dn_unbinned)
-        return nll
+        nu_tot = 0.0
+        
+        for process in self.all_samples:
+            # This will not work in the general case where model is non-linear in POI, needs modifications (TO-DO)
+            nu_tot += param_vec[param_index] * hist_yields[process] * hist_vars[process]
+
+        for process in self.fixed_processes:
+            nu_tot += hist_yields[process] * hist_vars[process]
+
+        return nu_tot
     
     @jax.jit
     def _calculate_parameterized_ratios(self, param_vec, 
@@ -136,6 +152,22 @@ class Model:
             
         return jnp.log( dnu_dx )
     
+    def model(self, param_array):
+        """
+        Output model to pass onto inference algorithms
+        """
+        param_array_interpolation           = param_vec[self.num_unconstrained_params:]
+        list_syst
+        nll                                 = self.nll_function(param_array, 
+                                                                param_array_interpolation,
+                                                                self.combined_var_up_binned,
+                                                                self.combined_var_dn_binned  ,
+                                                                self.combined_var_up_unbinned,
+                                                                self.combined_var_dn_unbinned,
+                                                                self.combined_tot_up_unbinned,
+                                                                self.combined_tot_dn_unbinned)
+        return nll
+    
     @jax.jit
     def nll_function(self, 
                      param_vec                  : list, 
@@ -149,12 +181,14 @@ class Model:
         """
         Optimized function for NLL computations
         """
-        hist_vars_binned       = {}
-        hist_vars_unbinned     = {}
-        ratio_vars_unbinned    = {}
+        norm_modifiers          = {}
+        hist_vars_binned        = {}
+        hist_vars_unbinned      = {}
+        ratio_vars_unbinned     = {}
 
         for process in self.all_samples:
             
+            norm_modifiers[process]     = calculate_norm_variations(param_vec, self.index_normparam_map)
             hist_vars_binned[process]   = calculate_combined_var(  param_vec_interpolation, 
                                                                         combined_var_up_binned[process],
                                                                         combined_var_dn_binned[process]    )
@@ -382,7 +416,7 @@ def exp_extrap(tuple_input):
 
 # loop over systematic uncertainty variations to calculate net effect
 @jax.jit
-def calculate_combined_var(Nparam_vec, combined_var_up, combined_var_down):
+def calculate_combined_var(param_vec, combined_var_up, combined_var_down):
 
     def calculate_variations(carry, param_val):
         
@@ -398,12 +432,17 @@ def calculate_combined_var(Nparam_vec, combined_var_up, combined_var_down):
         return combined_var_array_alpha, None
 
     # Prepare loop_tuple for jax.lax.scan 
-    loop_tuple = (Nparam_vec, combined_var_up, combined_var_down)
+    loop_tuple = (param_vec, combined_var_up, combined_var_down)
 
     # Loop over systematic variations to calculate net effect
     combined_var_array, _ = jax.lax.scan(calculate_variations, jnp.ones_like(combined_var_up[0]), loop_tuple)
 
     return combined_var_array
+
+@jax.jit
+def calculate_norm_variations(param_vec, index_normparam_map):
+
+    for sample in self.all_samples
 
 # Compute the poisson likelihood ratio
 @jax.jit
