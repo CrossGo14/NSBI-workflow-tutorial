@@ -14,12 +14,15 @@ class Model:
 
         self.workspace                                  = workspace
         self.measurements_dict: list[Dict[str, Any]]    = workspace["measurements"]
-
         for measurement in self.measurements_dict:
             measurement_name = measurement.get("name")
             if measurement_name == measurement:
                 self.measurement_name                   = measurement_name
                 self.poi                                = measurement["poi"]
+                self.measurement_param_dict             = measurement["config"]["parameters"]
+
+        self.parameters_in_measurement, \
+            self.initial_values_dict                    = self._get_parameters_to_fit()
         
         self.channels_binned                            = self._get_channel_list(type="binned")
         self.channels_unbinned                          = self._get_channel_list(type="unbinned")
@@ -27,21 +30,23 @@ class Model:
 
         self.all_samples                                = self._get_samples_list()
         
+        sorting_order                                   = {"normfactor": 0, "normplusshape": 1}
         self.list_parameters, \
-            self.list_parameters_types                  = self._get_parameters()
-        
+            self.list_parameters_types, \
+                self.num_unconstrained_param            = self._get_parameters(sorting_order)
+
         self.list_syst_normplusshape                    = self._get_list_syst_for_interp() 
-        self.list_normfactors, self.norm_sample_map     = self._get_norm_factors() 
+        self.list_normfactors, \
+            self.norm_sample_map                        = self._get_norm_factors() 
 
-        self.index_normparam_map: Dict[str, list[str]]  = self._make_map_index_norm()
+        self.initial_parameter_values                   = self._get_param_vec_initial()
 
+        self.index_normparam_map                        = self._make_map_index_norm()
 
         self.yield_array_dict, _                        = self._get_nominal_expected_arrays(type = "binned")
         self.unbinned_total_dict, \
             self.ratios_array_dict                      = self._get_nominal_expected_arrays(type = "unbinned")
-
-        self.weight_arrays_unbinned                     = self._get_asimov_weights_array(type = "unbinned")
-
+        
         self.combined_var_up_binned, \
             self.combined_var_dn_binned                 = self._get_systematic_data(type="binned")
         
@@ -49,10 +54,63 @@ class Model:
             self.combined_var_dn_unbinned, \
                 self.combined_tot_up_unbinned, \
                     self.combined_tot_dn_unbinned       = self._get_systematic_data(type="unbinned")
+        
+        self.weight_arrays_unbinned                     = self._get_asimov_weights_array( type = "unbinned" )
+        self.expected_hist                              = self._get_expected_hist(param_vec = self.initial_parameter_values)
+        # TO-DO - compute expected weight vector without additional input from workspace provide functionality for real data
 
-    def _get_norm_factors(self):
-        """Assume same normfactor across channels for now (TODO: Add support for normfactor per channel)"""
-        dict_sample_normfactors = {sample_name: [] for sample_name in self.all_samples}
+    def _get_expected_hist(self, param_vec):
+        """
+        Optimized function for NLL computations
+        """
+        param_vec_interpolation = param_vec[ self.num_unconstrained_param : ]
+        norm_modifiers          = {}
+        hist_vars_binned        = {}
+        hist_vars_unbinned      = {}
+        ratio_vars_unbinned     = {}
+
+        for process in self.all_samples:
+            
+            norm_modifiers[process]     = self._calculate_norm_variations(param_vec)
+
+            hist_vars_binned[process]   = calculate_combined_var(  param_vec_interpolation, 
+                                                                        self.combined_var_up_binned[process],
+                                                                        self.combined_var_dn_binned[process]    )
+
+            hist_vars_unbinned[process]  = calculate_combined_var(  param_vec_interpolation, 
+                                                                        self.combined_tot_up_unbinned[process],
+                                                                        self.combined_tot_dn_unbinned[process]    )   
+
+            ratio_vars_unbinned[process] = calculate_combined_var( param_vec_interpolation, 
+                                                                        self.combined_var_up_unbinned[process],
+                                                                        self.combined_var_dn_unbinned[process]    )        
+
+        data_expected = self._calculate_parameterized_yields(self.yield_array_dict, 
+                                                        hist_vars_binned, 
+                                                        norm_modifiers)
+
+        return data_expected
+        
+    def _make_map_index_norm(self):
+        """
+        Maps the index of parameter in the parameter vector to norm factor
+        """
+        dict_index_normfactor = {}
+        for normfactor in self.list_normfactors:
+            index = self.list_parameters.index(normfactor)
+            dict_index_normfactor[index] = normfactor
+        return dict_index_normfactor
+
+    def _get_param_vec_initial(self):
+        initial_values_vec                     = np.ones((len(self.list_parameters),)) 
+        for count, parameter in enumerate(self.list_parameters):
+            initial_values_vec[count]           = self.initial_values_dict[parameter]
+        return initial_values_vec
+
+    def _get_norm_factors(self) -> Union[list, Dict[str, list]]:
+        """Assume same normfactor across channels for now (TO-DO: Add support for normfactor per channel)"""
+        dict_sample_normfactors         = {sample_name: [] for sample_name in self.all_samples}
+        list_all_norm_factors           = []
         for channel in self.all_channels[:1]:
             channel_index = self._index_of_region(channel_name=channel)
             for sample in self.all_samples:
@@ -61,10 +119,24 @@ class Model:
                 for modifier in modifier_list:
                     if modifier["type"] == "normfactor":
                         modifier_name = modifier["name"]
-                        if modifier_name in dict_sample_normfactors[sample]: continue
-                        dict_sample_normfactors[sample].append(modifier_name)
+                        if modifier_name not in list_all_norm_factors               : list_all_norm_factors.append(modifier_name)
+                        if modifier_name not in dict_sample_normfactors[sample]     : dict_sample_normfactors[sample].append(modifier_name)
+                    
+        return list_all_norm_factors, dict_sample_normfactors
 
-        return dict_sample_normfactors
+    def _get_parameters_to_fit(self) -> list[str]:
+        """
+        Outputs a list of parameters specified by the user for fitting in the workspace
+        """
+        parameters_to_fit        = []
+        initial_value_params     = {}
+        for parameters in self.measurement_param_dict:
+            parameter_name                              = parameters["name"]
+            parameter_init                              = parameters["inits"]
+            parameters_to_fit.append(parameter_name)
+            initial_value_params[parameter_name]        = parameter_init
+
+        return parameters_to_fit, initial_value_params
 
     def _get_list_syst_for_interp(self):
         """Get the list of subset of systematics that need interpolation."""
@@ -105,7 +177,7 @@ class Model:
             weight_array        = np.append([weight_array, weights])
         return weight_array
     
-    def _get_parameters(self):
+    def _get_parameters(self, sorting_order):
         """Get a list of all parameters."""
         list_param_names = []
         list_param_types = []
@@ -116,39 +188,52 @@ class Model:
                 modifiers_list: list[Dict[str, Any]] = sample_dict["modifiers"]
                 for modifier in modifiers_list:
                     modifier_name = modifier.get("name")
+                    if modifier_name not in self.parameters_in_measurement: continue
                     modifier_type = modifier.get("type")
                     if modifier_name not in list_param_names:
                         list_param_names.append(modifier_name)
                         list_param_types.append(modifier_type)
-        return list_param_names, list_param_types
+
+        indices = np.argsort([sorting_order.get(param_type, 999) for param_type in list_param_types])
+
+        list_param_names = [list_param_names[i] for i in indices]
+        list_param_types = [list_param_types[i] for i in indices]
+
+        index_poi       = list_param_names.index(self.poi)
+        if index_poi    != 0:
+            poi_name = list_param_names.pop(index_poi)
+            poi_type = list_param_types.pop(index_poi)
+
+            list_param_names.insert(0, poi_name)
+            list_param_types.insert(0, poi_type)
+
+        num_unconstrained_params = 0
+        for poi_type_ in poi_type:
+            if poi_type_ != "normfactor":
+                break
+            num_unconstrained_params += 1
+
+        return list_param_names, list_param_types, num_unconstrained_params
     
     @jax.jit
-    def calculate_parameterized_yields(self, param_vec, hist_yields, hist_vars):
+    def _calculate_parameterized_yields(self, hist_yields, hist_vars, norm_modifiers):
 
         nu_tot = 0.0
         
         for process in self.all_samples:
             # This will not work in the general case where model is non-linear in POI, needs modifications (TO-DO)
-            nu_tot += param_vec[param_index] * hist_yields[process] * hist_vars[process]
-
-        for process in self.fixed_processes:
-            nu_tot += hist_yields[process] * hist_vars[process]
+            nu_tot += norm_modifiers[process] * hist_yields[process] * hist_vars[process]
 
         return nu_tot
     
     @jax.jit
-    def _calculate_parameterized_ratios(self, param_vec, 
-                                        nu_nominal, nu_vars, 
-                                        ratios, ratio_vars):
+    def _calculate_parameterized_ratios(self, nu_nominal, nu_vars, 
+                                        ratios, ratio_vars, norm_modifiers):
 
         dnu_dx = jnp.zeros_like(self.weight_arrays_unbinned)
 
         for process in self.all_samples:
-            param_index = tuple(self.process_index[process])
-            dnu_dx += param_vec[param_index] * nu_vars[process] * nu_nominal[process] * ratios[process] * ratio_vars[process]
-
-        for process in self.fixed_processes:
-            dnu_dx += nu_vars[process] * nu_nominal[process] * ratios[process] * ratio_vars[process]
+            dnu_dx += norm_modifiers[process] * nu_vars[process] * nu_nominal[process] * ratios[process] * ratio_vars[process]
             
         return jnp.log( dnu_dx )
     
@@ -157,7 +242,6 @@ class Model:
         Output model to pass onto inference algorithms
         """
         param_array_interpolation           = param_vec[self.num_unconstrained_params:]
-        list_syst
         nll                                 = self.nll_function(param_array, 
                                                                 param_array_interpolation,
                                                                 self.combined_var_up_binned,
@@ -169,15 +253,14 @@ class Model:
         return nll
     
     @jax.jit
-    def nll_function(self, 
-                     param_vec                  : list, 
-                     param_vec_interpolation    : list,
-                     combined_var_up_binned     : np.array(),
-                     combined_var_dn_binned     : np.array(),
-                     combined_var_up_unbinned   : np.array(),
-                     combined_var_dn_unbinned   : np.array(),
-                     combined_tot_up_unbinned   : np.array(),
-                     combined_tot_dn_unbinned   : np.array()):
+    def nll_function(self, param_vec, 
+                     param_vec_interpolation,
+                     combined_var_up_binned,
+                     combined_var_dn_binned,
+                     combined_var_up_unbinned,
+                     combined_var_dn_unbinned,
+                     combined_tot_up_unbinned,
+                     combined_tot_dn_unbinned):
         """
         Optimized function for NLL computations
         """
@@ -188,7 +271,8 @@ class Model:
 
         for process in self.all_samples:
             
-            norm_modifiers[process]     = calculate_norm_variations(param_vec, self.index_normparam_map)
+            norm_modifiers[process]     = self._calculate_norm_variations(param_vec)
+
             hist_vars_binned[process]   = calculate_combined_var(  param_vec_interpolation, 
                                                                         combined_var_up_binned[process],
                                                                         combined_var_dn_binned[process]    )
@@ -201,23 +285,24 @@ class Model:
                                                                         combined_var_up_unbinned[process],
                                                                         combined_var_dn_unbinned[process]    )        
 
-        nu_binned = self.calculate_parameterized_yields(param_vec, 
-                                                        self.yield_array_dict, 
-                                                        hist_vars_binned)
+        nu_binned = self._calculate_parameterized_yields(self.yield_array_dict, 
+                                                        hist_vars_binned, 
+                                                        norm_modifiers)
 
-        data_hist = self.data_hist_channel
+        # Simple hack to calculate expected (temporary) TO-DO: generalize
+        data_hist = self.data_hist
 
-        llr_tot_binned = pois_loglikelihood(data_hist, nu_binned)
+        llr_tot_binned = pois_loglikelihood(data_expected, nu_binned)
 
-        nu_tot_unbinned = self.calculate_parameterized_yields(param_vec, 
-                                                                  self.unbinned_total_dict, 
-                                                                  hist_vars_unbinned)
+        nu_tot_unbinned = self._calculate_parameterized_yields(self.unbinned_total_dict, 
+                                                                  hist_vars_unbinned,
+                                                                  norm_modifiers)
 
-        llr_tot_unbinned = self._calculate_parameterized_ratios(param_vec, 
-                                                               self.unbinned_total_dict, 
+        llr_tot_unbinned = self._calculate_parameterized_ratios(self.unbinned_total_dict, 
                                                                hist_vars_unbinned, 
                                                                self.ratios_array_dict, 
-                                                               ratio_vars_unbinned) \
+                                                               ratio_vars_unbinned,
+                                                               norm_modifiers) \
                             - jnp.log(nu_tot_unbinned)
         
         llr_tot = llr_tot_binned + llr_tot_unbinned + jnp.sum(param_vec_interpolation**2)        
@@ -225,7 +310,6 @@ class Model:
         return llr_tot
     
     
-
     def _get_nominal_expected_arrays(self, type:str):
         """
         Get an array of expected event yields or ratios
@@ -257,6 +341,16 @@ class Model:
                 ratio_expected[sample_name] =   np.append([ratio_expected[sample_name], sample_ratio])
 
         return data_expected, ratio_expected
+    
+    @jax.jit
+    def _calculate_norm_variations(self, param_vec):
+        norm_var = {sample_name: 1.0 for sample_name in self.all_samples}
+        for sample in self.all_samples:
+            params_sample: list[str] = self.norm_sample_map[sample]
+            for param in params_sample:
+                index_param             = self.index_normparam_map(param)
+                norm_var[sample]        *= param_vec[index_param]
+        return norm_var
     
     def _get_systematic_data(self, type: str) -> Dict[str, np.array()]:
         """
@@ -439,12 +533,11 @@ def calculate_combined_var(param_vec, combined_var_up, combined_var_down):
 
     return combined_var_array
 
-@jax.jit
-def calculate_norm_variations(param_vec, index_normparam_map):
-
-    for sample in self.all_samples
 
 # Compute the poisson likelihood ratio
 @jax.jit
-def pois_loglikelihood(data_hist, nu_hist):
-    return -2 * jnp.sum( data_hist * jnp.log(nu_hist) - nu_hist)
+def pois_loglikelihood(data_hist, exp_hist):
+    """
+    Computes the Poisson log-likelihood for observing data_hist, given expected exp_hist
+    """
+    return -2 * jnp.sum( data_hist * jnp.log(exp_hist) - exp_hist )
