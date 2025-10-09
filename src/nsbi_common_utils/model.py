@@ -2,7 +2,7 @@ import numpy as np
 import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
-from typing import Dict, Union, Any
+from typing import Dict, Union, Any, Optional
 
 class Model:
     """
@@ -10,17 +10,18 @@ class Model:
     """
     def __init__(self, 
                  workspace: Dict[Any, Any],
-                 measurement: str):
+                 measurement_to_fit: str):
 
         self.workspace                                  = workspace
         self.measurements_dict: list[Dict[str, Any]]    = workspace["measurements"]
         for measurement in self.measurements_dict:
             measurement_name = measurement.get("name")
-            if measurement_name == measurement:
+            if measurement_name == measurement_to_fit:
                 self.measurement_name                   = measurement_name
-                self.poi                                = measurement["poi"]
+                self.poi                                = measurement["config"]["poi"]
                 self.measurement_param_dict             = measurement["config"]["parameters"]
-
+                break
+        
         self.parameters_in_measurement, \
             self.initial_values_dict                    = self._get_parameters_to_fit()
         
@@ -114,7 +115,7 @@ class Model:
         for channel in self.all_channels[:1]:
             channel_index = self._index_of_region(channel_name=channel)
             for sample in self.all_samples:
-                sample_index = self._index_of_samples(channel_name=channel, sample_name=sample)
+                sample_index = self._index_of_sample(channel_name=channel, sample_name=sample)
                 modifier_list = self.workspace["channels"][channel_index]["samples"][sample_index]["modifiers"]
                 for modifier in modifier_list:
                     if modifier["type"] == "normfactor":
@@ -132,7 +133,7 @@ class Model:
         initial_value_params     = {}
         for parameters in self.measurement_param_dict:
             parameter_name                              = parameters["name"]
-            parameter_init                              = parameters["inits"]
+            parameter_init                              = parameters["inits"][0]
             parameters_to_fit.append(parameter_name)
             initial_value_params[parameter_name]        = parameter_init
 
@@ -140,12 +141,12 @@ class Model:
 
     def _get_list_syst_for_interp(self):
         """Get the list of subset of systematics that need interpolation."""
-        mask_normplusshape  = (self.list_parameters_types == "normplusshape")
-        list_normplusshape  = self.list_parameters[mask_normplusshape].copy()
+        mask_normplusshape  = (np.array(self.list_parameters_types) == "normplusshape")
+        list_normplusshape  = np.array(self.list_parameters)[mask_normplusshape].tolist()
         return list_normplusshape
 
     def _get_channel_list(self, 
-                          type: Union[Str, None] = None) -> list:
+                          type: Union[str, None] = None) -> list:
         """Get the channel list to be used in the measurement"""
         list_channels = []
         channels: list[Dict[str, Any]] = self.workspace["channels"]
@@ -174,7 +175,7 @@ class Model:
         for channel in self.channels_unbinned:
             channel_index       = self._index_of_region(channel)
             weights             = np.load(self.workspace["channels"][channel_index]["weights"])
-            weight_array        = np.append([weight_array, weights])
+            weight_array        = np.append(weight_array, weights)
         return weight_array
     
     def _get_parameters(self, sorting_order):
@@ -208,7 +209,7 @@ class Model:
             list_param_types.insert(0, poi_type)
 
         num_unconstrained_params = 0
-        for poi_type_ in poi_type:
+        for poi_type_ in list_param_types:
             if poi_type_ != "normfactor":
                 break
             num_unconstrained_params += 1
@@ -337,8 +338,8 @@ class Model:
                     sample_data             = np.array(self.workspace["channels"][channel_index]["samples"][sample_index]["data"])
                     sample_ratio            = np.load(self.workspace["channels"][channel_index]["samples"][sample_index]["ratios"])
 
-                data_expected[sample_name]  =   np.append([data_expected[sample_name], sample_data])
-                ratio_expected[sample_name] =   np.append([ratio_expected[sample_name], sample_ratio])
+                data_expected[sample_name]  =   np.append(data_expected[sample_name], sample_data)
+                ratio_expected[sample_name] =   np.append(ratio_expected[sample_name], sample_ratio)
 
         return data_expected, ratio_expected
     
@@ -352,7 +353,7 @@ class Model:
                 norm_var[sample]        *= param_vec[index_param]
         return norm_var
     
-    def _get_systematic_data(self, type: str) -> Dict[str, np.array()]:
+    def _get_systematic_data(self, type: str) -> Dict[str, np.ndarray]:
         """
         Builds a rectangular array with (N_syst, N_datapoints) dimensions, where N_datapoints is the number of bins in binned channels and number of events in unbinned channels. 
         Concatenates all binned or all unbinned channels into one big array for array-based computations.
@@ -360,20 +361,20 @@ class Model:
         type -> choose if building array for "unbinned" channels or "binned"
         """
         if type == "binned":
-            base_array_for_size     = self.yield_array_dict[sample_name]
+            base_array_for_size     = self.yield_array_dict[self.all_samples[0]]
             channel_list            = self.channels_binned
         elif type == "unbinned":
-            base_array_for_size     = self.ratios_array_dict[sample_name]
-            base_tot_for_size       = self.unbinned_total_dict[sample_name]
+            base_array_for_size     = self.ratios_array_dict[self.all_samples[0]]
+            base_tot_for_size       = self.unbinned_total_dict[self.all_samples[0]]
             channel_list            = self.channels_unbinned
 
-        combined_var_up             = {sample_name: np.ones((self.list_syst_normplusshape, 
-                                                             base_array_for_size)) for sample_name in self.all_samples}
+        combined_var_up             = {sample_name: np.ones((len(self.list_syst_normplusshape), 
+                                                             len(base_array_for_size))) for sample_name in self.all_samples}
         combined_var_dn             = combined_var_up.copy()
 
         if type == "unbinned":
-            combined_tot_up             = {sample_name: np.ones((self.list_syst_normplusshape, 
-                                                             base_tot_for_size)) for sample_name in self.all_samples}
+            combined_tot_up             = {sample_name: np.ones((len(self.list_syst_normplusshape), 
+                                                                 len(base_tot_for_size))) for sample_name in self.all_samples}
             combined_tot_dn             = combined_tot_up.copy()
 
         for sample_name in self.all_samples:
@@ -394,10 +395,10 @@ class Model:
                     sample_index            = self._index_of_sample(channel_name = channel_name,
                                                                     sample_name  = sample_name)
                     
-                    modifier_index          = self._index_of_systematic(channel_name    = channel_name,
+                    modifier_index          = self._index_of_modifiers(channel_name    = channel_name,
                                                                         sample_name     = sample_name,
                                                                         systematic_name = systematic_name)
-                    
+                    print(modifier_index)
                     modifier_dict           = self.workspace["channels"][channel_index]["samples"][sample_index]["modifiers"][modifier_index]
 
                     if type == "binned":
@@ -411,11 +412,11 @@ class Model:
                         var_array_dn_channel = np.load(modifier_dict["data"]["lo_ratio"])
                         var_total_dn_channel = np.load(modifier_dict["data"]["lo_data"])
 
-                        var_up_tot_syst       = np.append([var_up_tot_syst, var_total_up_channel])
-                        var_dn_tot_syst       = np.append([var_dn_tot_syst, var_total_dn_channel])
+                        var_up_tot_syst       = np.append(var_up_tot_syst, var_total_up_channel)
+                        var_dn_tot_syst       = np.append(var_dn_tot_syst, var_total_dn_channel)
 
-                    var_up_array_syst       = np.append([var_up_array_syst, var_array_up_channel])
-                    var_dn_array_syst       = np.append([var_dn_array_syst, var_array_dn_channel])
+                    var_up_array_syst       = np.append(var_up_array_syst, var_array_up_channel)
+                    var_dn_array_syst       = np.append(var_dn_array_syst, var_array_dn_channel)
 
                 combined_var_up[sample_name][count] = var_up_array_syst
                 combined_var_dn[sample_name][count] = var_dn_array_syst
@@ -423,6 +424,7 @@ class Model:
                 if type == "unbinned":
                     combined_tot_up[sample_name][count] = var_up_tot_syst
                     combined_tot_dn[sample_name][count] = var_dn_tot_syst
+                    print("ggf")
                     return combined_var_up, combined_var_dn, combined_tot_up, combined_tot_dn
 
         return combined_var_up, combined_var_dn
@@ -436,14 +438,14 @@ class Model:
         Get the index associated with a systematic, in a specific sample of a particular channel
         """
         channel_index                       = self._index_of_region(channel_name)
-        sample_index                        = self._index_of_samples(sample_name)
+        sample_index                        = self._index_of_sample(channel_name, sample_name)
         modifiers: list[dict[str, Any]]     = self.workspace["channels"][channel_index]["samples"][sample_index]["modifiers"]
-        for count, modifier in modifiers:
+        for count, modifier in enumerate(modifiers):
             if modifier.get("name") == systematic_name:
                 return count
         return None
 
-    def _index_of_samples(self, 
+    def _index_of_sample(self, 
                           channel_name: str,
                           sample_name: str) -> Optional[int]:
         """
@@ -451,7 +453,7 @@ class Model:
         """
         channel_index = self._index_of_region(channel_name)
         samples: list[dict[str, Any]] = self.workspace["channels"][channel_index]["samples"]
-        for count, sample in samples:
+        for count, sample in enumerate(samples):
             if sample.get("name") == sample_name:
                 return count
         return None
