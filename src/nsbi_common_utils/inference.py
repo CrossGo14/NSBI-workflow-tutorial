@@ -10,73 +10,23 @@ from tensorflow.keras.optimizers import Nadam
 import matplotlib.pyplot as plt
 from iminuit import Minuit
 
-# poynomial interpolation, same as HistFactory
-@jax.jit
-def poly_interp(tuple_input):
+def perform_fit(model_nll, 
+                initial_values, 
+                list_parameters, 
+                fit_strategy=2, 
+                freeze_params=[]):
+            
+    m = Minuit(model_nll, initial_values, 
+                grad=None, name=tuple(list_parameters))
     
-    alpha, pow_up, pow_down = tuple_input
-    
-    logHi         = jnp.log(pow_up)
-    logLo         = jnp.log(pow_down)
-    pow_up_log    = jnp.multiply(pow_up, logHi)
-    pow_down_log  = -jnp.multiply(pow_down, logLo)
-    pow_up_log2   =  jnp.multiply(pow_up_log, logHi)
-    pow_down_log2 = -jnp.multiply(pow_down_log, logLo)
-
-    S0 = (pow_up + pow_down) / 2.0
-    A0 = (pow_up - pow_down) / 2.0
-    S1 = (pow_up_log  + pow_down_log) / 2.0
-    A1 = (pow_up_log  - pow_down_log) / 2.0
-    S2 = (pow_up_log2 + pow_down_log2) / 2.0
-    A2 = (pow_up_log2 - pow_down_log2) / 2.0
-
-    a1 = ( 15 * A0 -  7 * S1 + A2)      / 8.0
-    a2 = (-24 + 24 * S0 -  9 * A1 + S2) / 8.0
-    a3 = ( -5 * A0 +  5 * S1 - A2)      / 4.0
-    a4 = ( 12 - 12 * S0 +  7 * A1 - S2) / 4.0
-    a5 = (  3 * A0 -  3 * S1 + A2)      / 8.0
-    a6 = ( -8 +  8 * S0 -  5 * A1 + S2) / 8.0
-
-    return alpha * (a1 + alpha * ( a2 + alpha * ( a3 + alpha * ( a4 + alpha * ( a5 + alpha * a6 ) ) ) ) )
-
-# exponential function for extrapolation   
-@jax.jit
-def exp_interp(tuple_input):
-    
-    alpha, varUp, varDown = tuple_input
-
-    return jnp.where(alpha>1.0, (varUp)**alpha, (varDown)**(-alpha)) - 1.0
-
-# loop over systematic uncertainty variations to calculate net effect
-@jax.jit
-def calculate_combined_var(Nparam_vec, combined_var_up, combined_var_down):
-
-    def calculate_variations(carry, param_val):
-        
-        param, combined_var_up_NP, combined_var_down_NP = param_val
-        
-        combined_var_array_alpha = carry
-    
-        # Strategy 5 of RooFit:
-        combined_var_array_alpha += combined_var_array_alpha * jax.lax.cond(jnp.abs(param)<=1.0, 
-                                                                            poly_interp, 
-                                                                            exp_interp, 
-                                                                            (param, combined_var_up_NP, combined_var_down_NP))            
-        return combined_var_array_alpha, None
-
-    # Prepare loop_tuple for jax.lax.scan 
-    loop_tuple = (Nparam_vec, combined_var_up, combined_var_down)
-
-    # Loop over systematic variations to calculate net effect
-    combined_var_array, _ = jax.lax.scan(calculate_variations, jnp.ones_like(combined_var_up[0]), loop_tuple)
-
-    return combined_var_array
-
-# Compute the poisson likelihood ratio
-@jax.jit
-def pois_loglikelihood(data_hist, nu_hist):
-
-    return -2 * jnp.sum( data_hist * jnp.log(nu_hist) - nu_hist)
+    m.errordef = Minuit.LEAST_SQUARES
+    strategy = fit_strategy
+    if len(freeze_params)>=1:
+        for param in freeze_params:
+            m.fixed[param] = True
+    m.strategy = strategy
+    mg = m.migrad()
+    print(f'fit: \n {mg}')
 
 class nsbi_inference:
 

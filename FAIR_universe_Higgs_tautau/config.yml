@@ -183,7 +183,7 @@ Regions:
         - SampleName    : ztautau
           Nominal       : 
                 Models  : saved_data/output_training_nominal/output_model_params_ztautau/
-                Ratios  : saved_data/output_training_nominal/output_ratios_ttbar/ratio_ztautau.npy
+                Ratios  : saved_data/output_training_nominal/output_ratios_ztautau/ratio_ztautau.npy
           Systematics    :
              - SystName: TES
                ModelsUp: saved_data/output_training_systematics/output_model_params_ztautau_TES_Up/
