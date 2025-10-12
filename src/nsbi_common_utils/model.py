@@ -44,17 +44,17 @@ class Model:
 
         self.index_normparam_map                        = self._make_map_index_norm()
 
-        self.yield_array_dict, _                        = self._get_nominal_expected_arrays(type_of_fit = "binned")
+        self.yield_array_dict, _                        = self._get_nominal_expected_arrays( type_of_fit = "binned" )
         self.unbinned_total_dict, \
-            self.ratios_array_dict                      = self._get_nominal_expected_arrays(type_of_fit = "unbinned")
-        
+            self.ratios_array_dict                      = self._get_nominal_expected_arrays( type_of_fit = "unbinned" )
+
         self.combined_var_up_binned, \
-            self.combined_var_dn_binned                 = self._get_systematic_data(type_of_fit="binned")
+            self.combined_var_dn_binned                 = self._get_systematic_data( type_of_fit="binned" )
         
         self.combined_var_up_unbinned, \
             self.combined_var_dn_unbinned, \
                 self.combined_tot_up_unbinned, \
-                    self.combined_tot_dn_unbinned       = self._get_systematic_data(type_of_fit="unbinned")
+                    self.combined_tot_dn_unbinned       = self._get_systematic_data( type_of_fit="unbinned" )
         
         self.weight_arrays_unbinned                     = self._get_asimov_weights_array()
         self.expected_hist                              = self._get_expected_hist(param_vec = self.initial_parameter_values)
@@ -83,14 +83,7 @@ class Model:
                 hist_vars_binned[process]   = calculate_combined_var(  param_vec_interpolation, 
                                                                             self.combined_var_up_binned[process],
                                                                             self.combined_var_dn_binned[process]    )
-    
-                # hist_vars_unbinned[process]  = calculate_combined_var(  param_vec_interpolation, 
-                #                                                             self.combined_tot_up_unbinned[process],
-                #                                                             self.combined_tot_dn_unbinned[process]    )   
-    
-                # ratio_vars_unbinned[process] = calculate_combined_var( param_vec_interpolation, 
-                #                                                             self.combined_var_up_unbinned[process],
-                #                                                             self.combined_var_dn_unbinned[process]    )
+
             else:
                 hist_vars_binned[process] = jnp.ones_like( self.yield_array_dict[process] )
 
@@ -237,9 +230,10 @@ class Model:
     def _calculate_parameterized_ratios(self, nu_nominal, nu_vars, 
                                         ratios, ratio_vars, norm_modifiers):
 
-        dnu_dx = jnp.zeros_like(self.weight_arrays_unbinned) # Generalize to any dataset, not just nominal
+        dnu_dx = jnp.zeros_like(self.weight_arrays_unbinned) # To-do: Generalize to any dataset, not just nominal
 
         for process in self.all_samples:
+            # jax.debug.print("norm_modifiers variations is {x1}", x1 = norm_modifiers[process])
             dnu_dx += norm_modifiers[process] * nu_vars[process] * nu_nominal[process] * ratios[process] * ratio_vars[process]
             
         return jnp.log( dnu_dx )
@@ -249,7 +243,9 @@ class Model:
         Output model to pass onto inference algorithms
         """
         param_array_interpolation           = param_array[self.num_unconstrained_param:]
+        ratios_dict                         = self.ratios_array_dict
         nll                                 = jax.jit(self.nll_function)(param_array, 
+                                                                         ratios_dict,
                                                                 param_array_interpolation,
                                                                 self.combined_var_up_binned,
                                                                 self.combined_var_dn_binned  ,
@@ -259,7 +255,7 @@ class Model:
                                                                 self.combined_tot_dn_unbinned)
         return nll
     
-    def nll_function(self, param_vec, 
+    def nll_function(self, param_vec, ratios_dict,
                      param_vec_interpolation,
                      combined_var_up_binned,
                      combined_var_dn_binned,
@@ -295,9 +291,9 @@ class Model:
 
             else:
 
-                hist_vars_binned[process]   = jnp.ones_like( self.yield_array_dict[process] )
+                hist_vars_binned[process]     = jnp.ones_like( self.yield_array_dict[process] )
                 hist_vars_unbinned[process]   = jnp.ones_like( self.unbinned_total_dict[process] )
-                ratio_vars_unbinned[process]  = jnp.ones_like( self.ratios_array_dict[process] )
+                ratio_vars_unbinned[process]  = jnp.ones_like( ratios_dict[process] )
 
         nu_binned = jax.jit(self._calculate_parameterized_yields)(self.yield_array_dict, 
                                                         hist_vars_binned, 
@@ -305,20 +301,23 @@ class Model:
 
         # Asimov-only for now - need to generalize to applications for real data
         expected_hist = self.expected_hist
+        
         llr_tot_binned = pois_loglikelihood(expected_hist, nu_binned)
 
         nu_tot_unbinned = jax.jit(self._calculate_parameterized_yields)(self.unbinned_total_dict, 
-                                                                  hist_vars_unbinned,
-                                                                  norm_modifiers)
+                                                                        hist_vars_unbinned,
+                                                                        norm_modifiers)
 
-        llr_tot_unbinned = jax.jit(self._calculate_parameterized_ratios)(self.unbinned_total_dict, 
-                                                               hist_vars_unbinned, 
-                                                               self.ratios_array_dict, 
-                                                               ratio_vars_unbinned,
-                                                               norm_modifiers) \
+        llr_pe_unbinned = jax.jit(self._calculate_parameterized_ratios)(self.unbinned_total_dict, 
+                                                                       hist_vars_unbinned, 
+                                                                       ratios_dict, 
+                                                                       ratio_vars_unbinned,
+                                                                       norm_modifiers) \
                             - jnp.log(nu_tot_unbinned)
+
+        # llr_tot_unbinned = pois_loglikelihood(expected_hist_unbinned, nu_tot_unbinned)
         
-        llr_tot = llr_tot_binned + np.sum(llr_tot_unbinned) + jnp.sum(param_vec_interpolation**2)        
+        llr_tot = llr_tot_binned - 2 * jnp.sum(self.weight_arrays_unbinned * llr_pe_unbinned, axis=0) + jnp.sum(param_vec_interpolation**2)        
         # llr_tot = llr_tot_binned + jnp.sum(param_vec_interpolation**2)        
 
         return llr_tot

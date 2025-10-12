@@ -563,6 +563,9 @@ class TrainEvaluate_NN:
                                                         ensemble_index = ensemble_index, 
                                                         use_log_loss = self.use_log_loss)
 
+        calibration_method = 'direct'
+        # calibration_method = ''
+        
         # If calibrating, use the train_data_prediction for building histogram
         if self.calibration:
 
@@ -575,10 +578,13 @@ class TrainEvaluate_NN:
             w_num = weight_train[label_train==1]
             w_den = weight_train[label_train==0]
 
+            importlib.reload(sys.modules['nsbi_common_utils.calibration'])
+            from nsbi_common_utils.calibration import HistogramCalibrator
+
             if not load_trained_models:
             
                 self.histogram_calibrator[ensemble_index] =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
-                                                                 nbins=num_bins_cal, method='direct', mode='dynamic')
+                                                                 nbins=num_bins_cal, method=calibration_method, mode='dynamic')
     
                 file_calib = open(path_to_calibrated_object, 'wb') 
     
@@ -590,7 +596,7 @@ class TrainEvaluate_NN:
                     print(f"Calibrating the saved model with {num_bins_cal} bins")
                     
                     self.histogram_calibrator[ensemble_index] =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
-                                                                 nbins=num_bins_cal, method='direct', mode='dynamic')
+                                                                 nbins=num_bins_cal, method=calibration_method, mode='dynamic')
     
                     file_calib = open(path_to_calibrated_object, 'wb') 
         
