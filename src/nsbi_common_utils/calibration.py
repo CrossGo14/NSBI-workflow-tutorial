@@ -39,7 +39,7 @@ class HistogramCalibrator:
         cal_pred = num/den
         
         if self.method == "direct":
-            score  = cal_pred/(1+cal_pred)
+            score  = cal_pred / ( 1 + cal_pred )
             return score
         else:
             return cal_pred
@@ -59,7 +59,6 @@ class HistogramCalibrator:
             if (w_num is not None) and (w_den is not None):
                 weights = np.hstack((w_num, w_den)).astype(float)
             edges = self.weighted_quantile(data, np.linspace(0.0, 1.0, nbins+1), sample_weight=weights)
-            
         elif mode == "dynamic_unweighted":
             percentages = 100.0 * np.linspace(0.0, 1.0, nbins+1)
             edges = np.percentile(data, percentages)
