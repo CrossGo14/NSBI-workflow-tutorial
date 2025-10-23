@@ -41,6 +41,7 @@ NormFactors:
 Systematics:
     -   Name                : JES
         Type                : NormPlusShape
+        Nominal             : 0
         Samples             : 
               - htautau
               - ztautau
@@ -73,6 +74,7 @@ Systematics:
                 Weight            : weights
     -   Name                : TES
         Type                : NormPlusShape
+        Nominal             : 0
         Samples             : 
               - htautau
               - ztautau

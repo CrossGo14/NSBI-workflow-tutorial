@@ -248,14 +248,19 @@ class WorkspaceBuilder:
             parameters_list.append(parameter)
 
         for sys in self.config_dict.get("Systematics", []):
-            # when there are many more systematics than NormFactors, it would be more
-            # efficient to loop over fixed parameters and exclude all NormFactor related
-            # ones to set all the remaining ones to constant (which are systematics)
-            sys_name = sys["Name"]  # every systematic has a name
+            sys_name = sys["Name"]
+            init = sys.get("Nominal", None)
+            bounds = sys.get("Bounds", None)
+
+            parameter = {"name": sys_name}
+            if init is not None:
+                parameter.update({"inits": [init]})
+            if bounds is not None:
+                parameter.update({"bounds": [bounds]})
+            parameters_list.append(parameter)
 
         parameters = {"parameters": parameters_list}
         config_dict.update(parameters)
-        # POI defaults to "" (interpreted as "no POI" by pyhf) if not specified
         config_dict.update({"poi": self.config_dict["General"].get("POI", "")})
         measurement.update({"config": config_dict})
         measurements.append(measurement)

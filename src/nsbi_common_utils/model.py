@@ -71,8 +71,8 @@ class Model:
         param_vec_interpolation = param_vec[ self.num_unconstrained_param : ]
         norm_modifiers          = {}
         hist_vars_binned        = {}
-        hist_vars_unbinned      = {}
-        ratio_vars_unbinned     = {}
+        # hist_vars_unbinned      = {}
+        # ratio_vars_unbinned     = {}
 
         norm_modifiers     = jax.jit(self._calculate_norm_variations)(param_vec)
 
@@ -314,11 +314,8 @@ class Model:
                                                                        ratio_vars_unbinned,
                                                                        norm_modifiers) \
                             - jnp.log(nu_tot_unbinned)
-
-        # llr_tot_unbinned = pois_loglikelihood(expected_hist_unbinned, nu_tot_unbinned)
         
-        llr_tot = llr_tot_binned - 2 * jnp.sum(self.weight_arrays_unbinned * llr_pe_unbinned, axis=0) + jnp.sum(param_vec_interpolation**2)        
-        # llr_tot = llr_tot_binned + jnp.sum(param_vec_interpolation**2)        
+        llr_tot = llr_tot_binned - 2 * jnp.sum(self.weight_arrays_unbinned * llr_pe_unbinned, axis=0) + jnp.sum(param_vec_interpolation**2)      
 
         return llr_tot
     
@@ -408,7 +405,6 @@ class Model:
                     modifier_index          = self._index_of_modifiers(channel_name    = channel_name,
                                                                         sample_name     = sample_name,
                                                                         systematic_name = systematic_name)
-                    print(modifier_index)
                     modifier_dict           = self.workspace["channels"][channel_index]["samples"][sample_index]["modifiers"][modifier_index]
 
                     if type_of_fit == "binned":
@@ -418,10 +414,10 @@ class Model:
                     elif type_of_fit == "unbinned":
                         
                         var_array_up_channel = np.load(modifier_dict["data"]["hi_ratio"])
-                        var_total_up_channel = np.load(modifier_dict["data"]["hi_data"])
+                        var_total_up_channel = modifier_dict["data"]["hi_data"]
 
                         var_array_dn_channel = np.load(modifier_dict["data"]["lo_ratio"])
-                        var_total_dn_channel = np.load(modifier_dict["data"]["lo_data"])
+                        var_total_dn_channel = modifier_dict["data"]["lo_data"]
 
                         var_up_tot_syst       = np.append(var_up_tot_syst, var_total_up_channel)
                         var_dn_tot_syst       = np.append(var_dn_tot_syst, var_total_dn_channel)

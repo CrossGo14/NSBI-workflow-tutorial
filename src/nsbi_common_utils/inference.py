@@ -12,9 +12,7 @@ from iminuit import Minuit
 
 class inference:
     """
-    Thin wrapper around iminuit to:
-      1) run a global fit of a user-provided negative log-likelihood (NLL),
-      2) scan/profile the NLL along a chosen parameter and plot the profile.
+    Class for parameter fitting and related diagnostics
 
     Parameters
     ----------
