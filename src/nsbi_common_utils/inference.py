@@ -34,10 +34,11 @@ class inference:
                 list_parameters: list[str],
                 num_unconstrained_params: int):
         
-        self.model_nll = model_nll
-        self.initial_values = initial_values
-        self.list_parameters = list_parameters
-        self.num_unconstrained_params = num_unconstrained_params
+        self.model_nll                      = model_nll
+        self.initial_values                 = initial_values
+        self.list_parameters                = list_parameters
+        self.num_unconstrained_params       = num_unconstrained_params
+        self.pulls_global_fit               = None
 
     def perform_fit(self, 
                     fit_strategy=2, 
@@ -87,6 +88,7 @@ class inference:
                       freeze_params: list[str] =[], 
                       doStatOnly: bool = False,
                       isConstrainedNP: bool = False,
+                      size: int = 100,
                       ax: plt.Axes | None = None):
         """
         Profile the NLL along `parameter_name` and plot the scan.
@@ -108,8 +110,8 @@ class inference:
             (those after `num_unconstrained_params`) at their global-fit values.
         isConstrainedNP : bool
             If True, change the y-axis label to t_alpha; else use t_mu.
-        use_likelihood_errordef : bool
-            See `perform_fit`—should match how your NLL is defined.
+        size : int
+            Number of scan points
         ax : matplotlib.axes.Axes | None
             Optional axis to draw on. If None, a new figure/axis is created.
         """
@@ -128,7 +130,10 @@ class inference:
             m.fixed[param] = True
 
         # Profile fit: subtract_min=True returns \Delta NLL
-        scan_points, NLL_value, _ = m.mnprofile(parameter_name, bound=bound_range, subtract_min=True)
+        scan_points, NLL_value, _ = m.mnprofile(parameter_name, 
+                                                bound=bound_range, 
+                                                subtract_min=True,
+                                                size = size)
 
         # Optionally plot a stat-only NLL curve 
         if doStatOnly: 
@@ -137,8 +142,6 @@ class inference:
                     "perform_fit() must be called before doStatOnly=True, "
                     "so nuisance parameters can be fixed at their global-fit values."
                 )
-            label_stat_syst = 'Stat+Syst'
-            label_stat_only = 'Stat Only'
 
             # Re-initialize with global fit pulls so that fixed params are at the best-fit point
             m_StatOnly = Minuit(self.model_nll, 
@@ -159,7 +162,8 @@ class inference:
             
             scan_points_StatOnly, NLL_value_StatOnly, _ = m_StatOnly.mnprofile(parameter_name, 
                                                                                bound=bound_range, 
-                                                                               subtract_min=True)
+                                                                               subtract_min=True,
+                                                                                size = size)
             
             ax.plot(
                 scan_points_StatOnly,
@@ -180,5 +184,4 @@ class inference:
         ax.set_ylim(bottom=0.0)
         ax.set_xlabel(parameter_label or parameter_name)
         ax.set_ylabel(r"$t_\alpha$" if isConstrainedNP else r"$t_\mu$")
-        ax.set_title(f"NLL profile: {parameter_label or parameter_name}")
     

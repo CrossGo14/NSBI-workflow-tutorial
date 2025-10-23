@@ -2,6 +2,8 @@ import numpy as np
 import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
+from jax.tree_util import tree_map
+from functools import partial
 from typing import Dict, Union, Any, Optional
 
 class Model:
@@ -40,6 +42,8 @@ class Model:
         self.list_normfactors, \
             self.norm_sample_map                        = self._get_norm_factors() 
 
+        self.has_normplusshape                          = len(self.list_syst_normplusshape) > 0
+
         self.initial_parameter_values                   = self._get_param_vec_initial()
 
         self.index_normparam_map                        = self._make_map_index_norm()
@@ -60,8 +64,12 @@ class Model:
         self.expected_hist                              = self._get_expected_hist(param_vec = self.initial_parameter_values)
         # TO-DO - compute expected weight vector without additional input from workspace provide functionality for real data
 
-    def get_model_parameters(self):
+        self._finalize_to_device()
 
+    def get_model_parameters(self):
+        """
+        Get the list of parameters and initial values in the right order to pass to fitting algorithms
+        """
         return self.list_parameters, self.initial_parameter_values
         
     def _get_expected_hist(self, param_vec):
@@ -71,14 +79,12 @@ class Model:
         param_vec_interpolation = param_vec[ self.num_unconstrained_param : ]
         norm_modifiers          = {}
         hist_vars_binned        = {}
-        # hist_vars_unbinned      = {}
-        # ratio_vars_unbinned     = {}
 
-        norm_modifiers     = jax.jit(self._calculate_norm_variations)(param_vec)
+        norm_modifiers     = self._calculate_norm_variations(param_vec)
 
         for process in self.all_samples:
             
-            if len(self.list_syst_normplusshape) > 0:
+            if self.has_normplusshape:
 
                 hist_vars_binned[process]   = calculate_combined_var(  param_vec_interpolation, 
                                                                             self.combined_var_up_binned[process],
@@ -87,7 +93,7 @@ class Model:
             else:
                 hist_vars_binned[process] = jnp.ones_like( self.yield_array_dict[process] )
 
-        data_expected = jax.jit(self._calculate_parameterized_yields)(  self.yield_array_dict, 
+        data_expected = self._calculate_parameterized_yields(  self.yield_array_dict, 
                                                                         hist_vars_binned, 
                                                                         norm_modifiers )
 
@@ -107,7 +113,7 @@ class Model:
         initial_values_vec                     = np.ones((len(self.list_parameters),)) 
         for count, parameter in enumerate(self.list_parameters):
             initial_values_vec[count]           = self.initial_values_dict[parameter]
-        return jnp.array(initial_values_vec)
+        return jnp.asarray(initial_values_vec)
 
     def _get_norm_factors(self) -> Union[list, Dict[str, list]]:
         """Assume same normfactor across channels for now (TO-DO: Add support for normfactor per channel)"""
@@ -126,7 +132,7 @@ class Model:
                     
         return list_all_norm_factors, dict_sample_normfactors
 
-    def _get_parameters_to_fit(self) -> list[str]:
+    def _get_parameters_to_fit(self) -> tuple[list[str], dict[str, float]]:
         """
         Outputs a list of parameters specified by the user for fitting in the workspace
         """
@@ -238,25 +244,24 @@ class Model:
             
         return jnp.log( dnu_dx )
     
-    def model(self, param_array):
+    def model(self, param_array: Union[np.array, jnp.array, list[float]]):
         """
         Output model to pass onto inference algorithms
         """
-        param_array_interpolation           = param_array[self.num_unconstrained_param:]
-        ratios_dict                         = self.ratios_array_dict
-        nll                                 = jax.jit(self.nll_function)(param_array, 
-                                                                         ratios_dict,
-                                                                param_array_interpolation,
+        param_array                         = jnp.asarray(param_array)
+        nll                                 = self.nll_function(param_array,
+                                                                self.ratios_array_dict,
                                                                 self.combined_var_up_binned,
-                                                                self.combined_var_dn_binned  ,
+                                                                self.combined_var_dn_binned,
                                                                 self.combined_var_up_unbinned,
                                                                 self.combined_var_dn_unbinned,
                                                                 self.combined_tot_up_unbinned,
                                                                 self.combined_tot_dn_unbinned)
         return nll
     
-    def nll_function(self, param_vec, ratios_dict,
-                     param_vec_interpolation,
+    def nll_function(self, 
+                     param_vec: list[float],
+                     ratios_dict,
                      combined_var_up_binned,
                      combined_var_dn_binned,
                      combined_var_up_unbinned,
@@ -266,16 +271,19 @@ class Model:
         """
         Optimized function for NLL computations
         """
+
+        param_vec_interpolation             = param_vec[self.num_unconstrained_param:]
+
         norm_modifiers          = {}
         hist_vars_binned        = {}
         hist_vars_unbinned      = {}
         ratio_vars_unbinned     = {}
 
-        norm_modifiers     = jax.jit(self._calculate_norm_variations)(param_vec)
+        norm_modifiers     = self._calculate_norm_variations(param_vec)
 
         for process in self.all_samples:
 
-            if len(self.list_syst_normplusshape) > 0:
+            if self.has_normplusshape:
                 
                 hist_vars_binned[process]   = calculate_combined_var(  param_vec_interpolation, 
                                                                             combined_var_up_binned[process],
@@ -295,7 +303,7 @@ class Model:
                 hist_vars_unbinned[process]   = jnp.ones_like( self.unbinned_total_dict[process] )
                 ratio_vars_unbinned[process]  = jnp.ones_like( ratios_dict[process] )
 
-        nu_binned = jax.jit(self._calculate_parameterized_yields)(self.yield_array_dict, 
+        nu_binned = self._calculate_parameterized_yields(self.yield_array_dict, 
                                                         hist_vars_binned, 
                                                         norm_modifiers)
 
@@ -304,18 +312,20 @@ class Model:
         
         llr_tot_binned = pois_loglikelihood(expected_hist, nu_binned)
 
-        nu_tot_unbinned = jax.jit(self._calculate_parameterized_yields)(self.unbinned_total_dict, 
+        nu_tot_unbinned = self._calculate_parameterized_yields(self.unbinned_total_dict, 
                                                                         hist_vars_unbinned,
                                                                         norm_modifiers)
 
-        llr_pe_unbinned = jax.jit(self._calculate_parameterized_ratios)(self.unbinned_total_dict, 
+        llr_pe_unbinned = self._calculate_parameterized_ratios(self.unbinned_total_dict, 
                                                                        hist_vars_unbinned, 
                                                                        ratios_dict, 
                                                                        ratio_vars_unbinned,
                                                                        norm_modifiers) \
                             - jnp.log(nu_tot_unbinned)
         
-        llr_tot = llr_tot_binned - 2 * jnp.sum(self.weight_arrays_unbinned * llr_pe_unbinned, axis=0) + jnp.sum(param_vec_interpolation**2)      
+        llr_tot = llr_tot_binned \
+                    - 2 * jnp.sum(self.weight_arrays_unbinned * llr_pe_unbinned, axis=0) \
+                    + jnp.sum(param_vec_interpolation**2)      
 
         return llr_tot
     
@@ -378,12 +388,14 @@ class Model:
 
         combined_var_up             = {sample_name: np.ones((len(self.list_syst_normplusshape), 
                                                              len(base_array_for_size))) for sample_name in self.all_samples}
-        combined_var_dn             = combined_var_up.copy()
+        combined_var_dn             = {sample_name: np.ones((len(self.list_syst_normplusshape), 
+                                                             len(base_array_for_size))) for sample_name in self.all_samples}
 
         if type_of_fit == "unbinned":
             combined_tot_up             = {sample_name: np.ones((len(self.list_syst_normplusshape), 
                                                                  len(base_tot_for_size))) for sample_name in self.all_samples}
-            combined_tot_dn             = combined_tot_up.copy()
+            combined_tot_dn             = {sample_name: np.ones((len(self.list_syst_normplusshape), 
+                                                                 len(base_tot_for_size))) for sample_name in self.all_samples}
 
         for sample_name in self.all_samples:
 
@@ -425,8 +437,8 @@ class Model:
                     var_up_array_syst       = np.append(var_up_array_syst, var_array_up_channel)
                     var_dn_array_syst       = np.append(var_dn_array_syst, var_array_dn_channel)
 
-                combined_var_up[sample_name][count] = jnp.array(var_up_array_syst)
-                combined_var_dn[sample_name][count] = jnp.array(var_dn_array_syst)
+                combined_var_up[sample_name][count] = var_up_array_syst
+                combined_var_dn[sample_name][count] = var_dn_array_syst
 
                 if type_of_fit == "unbinned":
                     
@@ -438,6 +450,22 @@ class Model:
             
         return combined_var_up, combined_var_dn
 
+    def _finalize_to_device(self):
+        # convert to JAX arrays for JIT compiled function
+        self.yield_array_dict           = tree_map(jnp.asarray, self.yield_array_dict)
+        self.unbinned_total_dict        = tree_map(jnp.asarray, self.unbinned_total_dict)
+        self.ratios_array_dict          = tree_map(jnp.asarray, self.ratios_array_dict)
+
+        self.combined_var_up_unbinned   = tree_map(jnp.asarray, self.combined_var_up_unbinned)
+        self.combined_var_dn_unbinned   = tree_map(jnp.asarray, self.combined_var_dn_unbinned)
+
+        self.combined_tot_up_unbinned   = tree_map(jnp.asarray, self.combined_tot_up_unbinned)
+        self.combined_tot_dn_unbinned   = tree_map(jnp.asarray, self.combined_tot_dn_unbinned)
+
+        self.combined_var_up_binned     = tree_map(jnp.asarray, self.combined_var_up_binned)
+        self.combined_var_dn_binned     = tree_map(jnp.asarray, self.combined_var_dn_binned)
+
+        self.weight_arrays_unbinned     = jnp.asarray(self.weight_arrays_unbinned)
         
     def _index_of_modifiers(self, 
                           channel_name: str,
