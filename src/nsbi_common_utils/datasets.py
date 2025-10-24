@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import uproot
+import copy
 import pathlib
 from typing import Any, Dict, List, Literal, Optional, Union
 
@@ -17,8 +18,8 @@ class datasets:
         
         if len(branches_to_load) == 0:
             raise Exception(f"Empty branch list.")
-        self.branches_to_load           = branches_to_load
-        self.branches_all               = self.branches_to_load
+        self.branches_to_load           = list(branches_to_load)
+        self.branches_all               = list(self.branches_to_load)
 
     def load_datasets_from_config(self,
                                 load_systematics = False):
@@ -33,7 +34,7 @@ class datasets:
             path_to_root_file   = dict_sample["SamplePath"]
             tree_name           = dict_sample["Tree"]
             sample_name         = dict_sample["Name"]
-            branches_to_load    = self.branches_to_load
+            branches_to_load    = list(self.branches_to_load)
             if weight_branch[0] not in branches_to_load:
                 branches_to_load += weight_branch
                 
@@ -62,7 +63,7 @@ class datasets:
                             sample_name         = dict_sample["SampleName"]
                             tree_name           = dict_sample["Tree"]
                             weight_branch       = [dict_sample["Weight"]] if "Weight" in dict_sample.keys() else []
-                            branches_to_load    = self.branches_to_load
+                            branches_to_load    = list(self.branches_to_load)
                             if weight_branch[0] not in branches_to_load:
                                 branches_to_load += weight_branch
                             dict_datasets[syst_name_var][sample_name] = load_dataframe_from_root(path_to_root_file, 
