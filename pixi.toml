@@ -36,6 +36,7 @@ coffea = ">=2025.7.3,<2026"
 
 [feature.gpu.pypi-dependencies]
 nsbi-common-utils = { path = ".", editable = true }
+higgsml = "==0.1.3"
 
 [environments]
 nsbi-env-gpu = { features = ["gpu"], no-default-feature = true }
