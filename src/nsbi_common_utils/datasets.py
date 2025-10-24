@@ -50,8 +50,8 @@ class datasets:
                 dict_datasets["Nominal"][sample_name]["weights"] = 1.0
 
         if load_systematics:
-            for dict_syst in self.config.config["Systematics"]:
-
+            systematics_dict_list = self.config.config.get("Systematics", [{}])
+            for dict_syst in systematics_dict_list:
                 syst_name = dict_syst["Name"]
                 syst_type = dict_syst["Type"]
                 if syst_type == "NormPlusShape":
@@ -99,7 +99,8 @@ class datasets:
                                 tree_name)
 
         if save_systematics:
-            for dict_syst in self.config.config["Systematics"]:
+            systematics_dict_list = self.config.config.get("Systematics", [{}])
+            for dict_syst in systematics_dict_list:
 
                 syst_name = dict_syst["Name"]
                 syst_type = dict_syst["Type"]
