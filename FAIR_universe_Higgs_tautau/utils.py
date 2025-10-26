@@ -3,14 +3,14 @@ import pandas as pd
 import mplhep as hep
 import matplotlib.pyplot as plt
 
-def calculate_preselection_observable(pred_NN_incl, labels_dict, signal_processes, background_processes, pre_factor_dict = {'htautau': 1.0, 'ttbar': 1.0, 'ztautau': 1.0}):
+def calculate_preselection_observable(pred_NN_incl, samples_list, signal_processes, background_processes, pre_factor_dict = {'htautau': 1.0, 'ttbar': 1.0, 'ztautau': 1.0}):
 
     signal_sum = np.sum(
-        [pre_factor_dict[signal] * pred_NN_incl[:, labels_dict[signal]] for signal in signal_processes], axis=0
+        [pre_factor_dict[signal] * pred_NN_incl[:, samples_list[signal]] for signal in signal_processes], axis=0
     )
 
     background_sum = np.sum(
-        [pre_factor_dict[background] * pred_NN_incl[:, labels_dict[background]] for background in background_processes], axis=0
+        [pre_factor_dict[background] * pred_NN_incl[:, samples_list[background]] for background in background_processes], axis=0
     )
     # the preselection score as defined above - log(P_S/P_B)
     presel_score = np.log(signal_sum/background_sum)
@@ -25,24 +25,9 @@ def preselection_using_score(dataset, channel_selections):
 
     for channel, selection_dict in channel_selections.items():
 
-        lower_cut = selection_dict.get('lower_presel')
-        upper_cut = selection_dict.get('upper_presel')
-
-        if (lower_cut != -999) and (upper_cut != -999):
-    
-            mask_channel = (
-                (dataset.presel_score >= lower_cut) &
-                (dataset.presel_score <= upper_cut)
-            )
-    
-        elif (lower_cut != -999):
-            mask_channel = (dataset.presel_score >= lower_cut)
-    
-        elif (upper_cut != -999):
-            mask_channel = (dataset.presel_score <= upper_cut)
-    
-    
-        dataset_channel[channel]   = dataset[mask_channel].copy()
+        selection = selection_dict['preselections']
+        
+        dataset_channel[channel] = dataset.query(selection)
 
     return dataset_channel
 
@@ -53,7 +38,7 @@ def plot_kinematic_features(
     variations_to_plot,
     dataset_dict,
     xlabel_dict,
-    labels_dict
+    samples_list
 ):
     """
     For each feature in `columns`, builds weighted histograms for each (label, variation)
@@ -74,8 +59,8 @@ def plot_kinematic_features(
             - "weights"
     xlabel_dict : dict[str->str]
         Mapping each feature name → label for the x‐axis.
-    labels_dict : list (or iterable) of str
-        The list of unique labels to loop over (used to mask `df.detailed_labels == label`).
+    samples_list : list
+        The list of sample labels to loop over.
 
     Returns
     -------
@@ -83,22 +68,23 @@ def plot_kinematic_features(
         The Figure and array of Axes where the histograms were drawn.
     """
     # Compute all histograms and bins
-    hist = {feat: {lbl: {} for lbl in labels_dict} for feat in columns}
+    hist = {feat: {lbl: {} for lbl in samples_list} for feat in columns}
     bins_dict = {}
 
     for feature in columns:
-        # Compute bins from the 'nominal' dataset
-        arr_nom = dataset_dict['nominal'][feature].to_numpy()
-        bins = np.histogram_bin_edges(arr_nom, bins=nbins)
-        bins_dict[feature] = bins
+        for label in samples_list:
+            # Compute bins from the 'nominal' dataset
+            arr_nom = dataset_dict['Nominal'][label][feature].to_numpy()
+            bins = np.histogram_bin_edges(arr_nom, bins=nbins)
+            bins_dict[feature] = bins
+            break
 
         # For each variation & label, fill the histogram
         for variation in variations_to_plot:
-            df_var = dataset_dict[variation]
-            for label in labels_dict:
-                mask = (df_var.detailed_labels == label)
-                vals = df_var.loc[mask, feature].to_numpy()
-                wts = df_var.loc[mask, 'weights'].to_numpy()
+            for label in samples_list:
+                df_var = dataset_dict[variation][label]
+                vals = df_var[feature].to_numpy()
+                wts = df_var["weights"].to_numpy()
                 hist_vals, _ = np.histogram(vals, weights=wts, bins=bins)
                 hist[feature][label][variation] = hist_vals
 
@@ -111,7 +97,7 @@ def plot_kinematic_features(
 
     # Prepare color/linestyle maps
     palette = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    color_label_map = {lbl: palette[i % len(palette)] for i, lbl in enumerate(labels_dict)}
+    color_label_map = {lbl: palette[i % len(palette)] for i, lbl in enumerate(samples_list)}
     linestyle_map = {
         variations_to_plot[0]: '-',
         variations_to_plot[1]: '--',
@@ -120,12 +106,12 @@ def plot_kinematic_features(
 
     # Plot each feature in its own Axes
     for ax, feature in zip(axes, columns):
-        for label in labels_dict:
+        for label in samples_list:
             for variation in variations_to_plot:
                 hep.histplot(
                     hist[feature][label][variation],
                     bins=bins_dict[feature],
-                    label=(label if variation == 'nominal' else None),
+                    label=(label if variation == 'Nominal' else None),
                     ax=ax,
                     linewidth=1.5,
                     color=color_label_map[label],

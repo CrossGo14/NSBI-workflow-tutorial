@@ -7,12 +7,20 @@ pd.options.mode.chained_assignment = None
 
 import pickle 
 
+from pathlib import Path
+
+from typing import Union, Dict
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.callbacks import EarlyStopping
 import tensorflow.keras.backend as K
 from tensorflow.keras import layers
 from tensorflow.keras.layers import Dense
+
+import tf2onnx
+import onnx
+import onnxruntime as rt
+
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer
@@ -22,32 +30,125 @@ from joblib import dump, load
 
 import pickle 
 
-from nsbi_common_utils.plotting import plot_loss, plot_all_features
 from nsbi_common_utils.calibration import HistogramCalibrator
 
 importlib.reload(sys.modules['nsbi_common_utils.plotting'])
-from nsbi_common_utils.plotting import plot_all_features
+from nsbi_common_utils.plotting import plot_loss, plot_all_features, plot_all_features, plot_reweighted, plot_calibration_curve, plot_calibration_curve_ratio
 
 from joblib import dump, load
 
 from tensorflow.keras.models import model_from_json
 
+
+
+
+def save_model(onnx_model_instance, 
+                    path_to_save_model: Union[str, Path], 
+                    scaler_instance, 
+                    path_to_save_scaler: Union[str, Path]) -> None:
+
+        # Save ONNX model
+        onnx.save_model(onnx_model_instance, str(path_to_save_model))
+
+        # Save the standardization scaler
+        dump(scaler_instance, str(path_to_save_scaler), compress=True)
+
+
+def load_trained_model(path_to_saved_model: Union[Path, str], 
+                        path_to_saved_scaler: Union[Path, str]):
+
+    # Load scaler
+    scaler          = load(str(path_to_saved_scaler))
+
+    # Load ONNX model
+    model           = onnx.load(str(path_to_saved_model))
+
+    return scaler, model
+
+
+def predict_with_onnx(dataset, scaler, model, batch_size = 10_000):
+
+    sess_opts = rt.SessionOptions()
+    sess_opts.intra_op_num_threads = 1
+    sess_opts.inter_op_num_threads = 1
+
+    if isinstance(model, onnx.ModelProto):
+        model = rt.InferenceSession(model.SerializeToString(), 
+                                    sess_options = sess_opts,
+                                    providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+    
+    elif isinstance(model, rt.InferenceSession):
+        model = model
+    else:
+        raise TypeError(f"Unsupported model type: {type(model)}")
+
+    scaled_dataset              = scaler.transform(dataset)
+
+    # Get model input/output names
+    input_name                  = model.get_inputs()[0].name
+    output_name                 = model.get_outputs()[0].name
+
+    preds = []
+    for i in range(0, len(scaled_dataset), batch_size):
+        batch       = scaled_dataset[i:i+batch_size]
+        pred        = model.run([output_name], {input_name: batch})[0]
+        preds.append(pred)
+
+    final_pred = np.concatenate(preds, axis=0)
+
+    return final_pred
+
+def convert_tf_to_onnx(model, opset=17):
+
+    model.output_names      = [t.name.split(":")[0] for t in model.outputs]
+
+    # Build a TensorSpec for every model input
+    sig = []
+    for i, inp in enumerate(model.inputs):
+        shape = [d if d is not None else None for d in inp.shape]  # keep None for dynamic batch
+        dtype = inp.dtype
+        name = inp.name.split(":")[0] or f"input_{i}"
+        sig.append(tf.TensorSpec(shape=shape, dtype=dtype, name=name))
+
+    # Convert using that signature
+    model_onnx, _ = tf2onnx.convert.from_keras(
+        model,
+        input_signature=tuple(sig),
+        opset=opset
+    )
+    return model_onnx
+
+    # model.output_names      = [t.name.split(":")[0] for t in model.outputs]
+
+    # input_dim               = model.input_shape[1]
+
+    # spec                    = (tf.TensorSpec([None, input_dim], tf.float32, name="input"),)
+
+    # model_onnx, _ = tf2onnx.convert.from_keras(model, input_signature=spec, opset=17)
+
+    # return model_onnx
+
 class TrainEvaluatePreselNN:
     '''
     A class for training the multi-class classification neural network for preselecting phase space for SBI
     '''
-    def __init__(self, dataset, num_classes, features, features_scaling):
+    def __init__(self, dataset, features, features_scaling, 
+                    train_labels_column = 'train_labels',
+                    weights_normed_column = 'weights_normed'):
         '''
         dataset: dataframe with the multiple classes for training
         num_classes: number of classes corresponding to the number of output nodes of softmax layer
         features: input features to use for training
         features_scaling: subset of input features to standardize before training
         '''
-        self.dataset = dataset
-        self.data_features_training = dataset[features].copy()
-        self.features = features
-        self.features_scaling = features_scaling
-        self.num_classes = num_classes
+        self.dataset                            = dataset
+        self.data_features_training             = dataset[features].copy()
+        self.features                           = features
+        self.features_scaling                   = features_scaling
+        self.num_classes                        = len(np.unique(dataset.train_labels))
+
+        self.train_labels_column                = train_labels_column
+        self.weights_normed_column              = weights_normed_column
 
     # Defining a simple NN training for preselection - no need for "flexibility" here
     def train(self, test_size=0.15, 
@@ -70,11 +171,11 @@ class TrainEvaluatePreselNN:
 
         # Split data into training and validation sets (including weights)
         X_train, X_val, y_train, y_val, weight_train, weight_val = train_test_split(self.data_features_training, 
-                                                                                    self.dataset['train_labels'], 
-                                                                                    self.dataset['weights_normed'], 
+                                                                                    self.dataset[self.train_labels_column], 
+                                                                                    self.dataset[self.weights_normed_column], 
                                                                                     test_size=test_size, 
                                                                                     random_state=random_state, 
-                                                                                    stratify=self.dataset['train_labels'])
+                                                                                    stratify=self.dataset[self.train_labels_column])
 
         # Standardize the input features
         self.scaler = ColumnTransformer([("scaler", StandardScaler(), self.features_scaling)],remainder='passthrough')
@@ -82,7 +183,7 @@ class TrainEvaluatePreselNN:
         X_val = self.scaler.transform(X_val)
         
         # Define the neural network model
-        self.model = keras.Sequential([
+        self.model = tf.keras.Sequential([
             layers.Input(shape=(self.data_features_training.shape[1],)),  # Input layer
             layers.Dense(1000, activation='swish'),
             layers.Dense(1000, activation='swish'),
@@ -109,44 +210,33 @@ class TrainEvaluatePreselNN:
 
         K.clear_session()
 
+        # Convert Keras model to ONNX
+        self.model                  = convert_tf_to_onnx(self.model)
+
         # Save the trained model if user provides with a path
         if path_to_save!='':
 
-            if not os.path.exists(path_to_save):
-                os.makedirs(path_to_save)
-    
-            model_json = self.model.to_json()
-            with open(path_to_save+"model_arch_presel.json", "w") as json_file:
-                json_file.write(model_json)
-    
-            # serialize weights to HDF5
-            self.model.save_weights(path_to_save+"model_weights_presel.weights.h5")
+            path_to_save      = Path(path_to_save)
+            path_to_save.mkdir(parents=True, exist_ok=True)
 
-            # Save the standard scaling
-            saved_scaler = path_to_save+"model_scaler_presel.bin"
-            dump(self.scaler, saved_scaler, compress=True)
+            path_to_model           = path_to_save / 'model_preselection.onnx'
+            path_to_scaler          = path_to_save / 'model_scaler_presel.bin'
+
+            save_model(self.model, path_to_model, self.scaler, path_to_scaler)
 
 
-    def get_trained_model(self, path_to_models):
+    def assign_trained_model(self, 
+                         path_to_models: str) -> None:
         '''
         Method to load the trained model
 
-        path_to_models: path to the directory with saved model config files
+        path_to_models: path to the directory with saved model and scaler files
         '''
-        json_file = open(path_to_models+'/model_arch_presel.json', "r")
 
-        loaded_model_json = json_file.read()
+        path_to_saved_scaler        = path_to_models + '/model_scaler_presel.bin'
+        path_to_saved_models        = path_to_models + '/model_preselection.onnx'
 
-        json_file.close()
-
-        self.model = model_from_json(loaded_model_json)
-
-        self.model.load_weights(path_to_models+'/model_weights_presel.weights.h5')
-
-        self.model.compile(loss='sparse_categorical_crossentropy', optimizer='nadam')
-
-        self.scaler = load(path_to_models+'/model_scaler_presel.bin')
-
+        self.scaler, self.model     = load_trained_model(path_to_saved_models, path_to_saved_scaler)
 
     def predict(self, dataset):
         '''
@@ -154,11 +244,11 @@ class TrainEvaluatePreselNN:
 
         dataset: the dataset to evaluate trained model on
         '''
-        features_scaled = self.scaler.transform(dataset[self.features])
-        pred_NN = self.model.predict(features_scaled, batch_size=10000)
-        K.clear_session()
+        pred                        = predict_with_onnx(dataset[self.features], 
+                                                        self.scaler, 
+                                                        self.model)
         
-        return pred_NN
+        return pred
 
         
 
@@ -268,7 +358,7 @@ class TrainEvaluate_NN:
         for ensemble_index in range(num_ensemble_members):
 
             if load_trained_models:
-                if os.path.exists(f"{self.path_to_models}/model_weights{ensemble_index}.weights.h5"):
+                if os.path.exists(f"{self.path_to_models}/model{ensemble_index}.onnx"):
                     print(f"Loading existing model for ensemble member {ensemble_index}")
                     load_trained_models_ensemble_member = True
                 else:
@@ -369,8 +459,11 @@ class TrainEvaluate_NN:
                                                                                             random_state=rnd_seed,                                                        
                                                                                             stratify=self.training_labels)
 
+        self.dataset_training   = self.dataset.iloc[self.train_idx[ensemble_index]].copy()
+        self.dataset_holdout   = self.dataset.iloc[self.holdout_idx[ensemble_index]].copy()
+
         # split the original dataset into training and holdout
-        data_train_full, data_holdout_full = self.dataset.iloc[self.train_idx[ensemble_index]].copy(), self.dataset.iloc[self.holdout_idx[ensemble_index]].copy()
+        data_train_full, data_holdout_full = self.dataset_training.copy(), self.dataset_holdout.copy()
         label_train, label_holdout = self.training_labels[self.train_idx[ensemble_index]].copy(), self.training_labels[self.holdout_idx[ensemble_index]].copy()
         weight_train, weight_holdout = self.weights[self.train_idx[ensemble_index]].copy(), self.weights[self.holdout_idx[ensemble_index]].copy()
 
@@ -385,9 +478,12 @@ class TrainEvaluate_NN:
         # Load pre-trained models and scaling
         if load_trained_models:
 
+            path_to_saved_scaler        = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
+            path_to_saved_model         = f"{self.path_to_models}model{ensemble_index}.onnx"
+
             print(f"Reading saved models from {self.path_to_models}")
-            self.scaler[ensemble_index], self.model_NN[ensemble_index] = self.get_trained_model(self.path_to_models, 
-                                                                                                ensemble_index = ensemble_index)
+            self.scaler[ensemble_index], self.model_NN[ensemble_index] = load_trained_model(path_to_saved_model, path_to_saved_scaler)
+            
         # Else setup a new scaler
         else:
 
@@ -447,29 +543,31 @@ class TrainEvaluate_NN:
             K.clear_session()
         
             print("Finished Training")
+
+            # Convert Keras model to ONNX
+            self.model_NN[ensemble_index]                   = convert_tf_to_onnx(self.model_NN[ensemble_index])
+
+            path_to_saved_scaler        = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
+            path_to_saved_model         = f"{self.path_to_models}model{ensemble_index}.onnx"
+
+            save_model(self.model_NN[ensemble_index], path_to_saved_model,
+                        self.scaler[ensemble_index], path_to_saved_scaler)
     
-            saved_scaler = f"{self.path_to_models}model_scaler{ensemble_index}.bin"
-            print(saved_scaler)
-    
-            model_json = self.model_NN[ensemble_index].to_json()
-            with open(f"{self.path_to_models}model_arch{ensemble_index}.json", "w") as json_file:
-                json_file.write(model_json)
-    
-            # serialize weights to HDF5
-            self.model_NN[ensemble_index].save_weights(f"{self.path_to_models}model_weights{ensemble_index}.weights.h5")
-    
+            # Save metadata
             np.save(f"{self.path_to_models}num_events_random_state_train_holdout_split{ensemble_index}.npy", 
                     np.array([holdout_num, rnd_seed]))
-    
-            dump(self.scaler[ensemble_index], saved_scaler, compress=True)
     
             plot_loss(self.history, path_to_figures=self.path_to_figures)
 
         
         # Do a first prediction without calibration layers
-        train_data_prediction = self.predict_with_model(data_train_full, ensemble_index = ensemble_index, 
+        train_data_prediction = self.predict_with_model(data_train_full, 
+                                                        ensemble_index = ensemble_index, 
                                                         use_log_loss = self.use_log_loss)
 
+        calibration_method = 'direct'
+        # calibration_method = ''
+        
         # If calibrating, use the train_data_prediction for building histogram
         if self.calibration:
 
@@ -482,14 +580,17 @@ class TrainEvaluate_NN:
             w_num = weight_train[label_train==1]
             w_den = weight_train[label_train==0]
 
+            importlib.reload(sys.modules['nsbi_common_utils.calibration'])
+            from nsbi_common_utils.calibration import HistogramCalibrator
+
             if not load_trained_models:
             
                 self.histogram_calibrator[ensemble_index] =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
-                                                                 nbins=num_bins_cal, method='direct', mode='dynamic')
+                                                                 nbins=num_bins_cal, method=calibration_method, mode='dynamic')
     
                 file_calib = open(path_to_calibrated_object, 'wb') 
     
-                pickle.dump(self.histogram_calibrator, file_calib)
+                pickle.dump(self.histogram_calibrator[ensemble_index], file_calib)
     
             else:
                 if not os.path.exists(path_to_calibrated_object) or recalibrate_output:
@@ -497,7 +598,7 @@ class TrainEvaluate_NN:
                     print(f"Calibrating the saved model with {num_bins_cal} bins")
                     
                     self.histogram_calibrator[ensemble_index] =  HistogramCalibrator(calibration_data_num, calibration_data_den, w_num, w_den, 
-                                                                 nbins=num_bins_cal, method='direct', mode='dynamic')
+                                                                 nbins=num_bins_cal, method=calibration_method, mode='dynamic')
     
                     file_calib = open(path_to_calibrated_object, 'wb') 
         
@@ -506,6 +607,7 @@ class TrainEvaluate_NN:
                 
                     file_calib = open(path_to_calibrated_object, 'rb') 
                     self.histogram_calibrator[ensemble_index] = pickle.load(file_calib)
+                    print(f"L 509 calibrator object loaded = {self.histogram_calibrator}")
             
             self.full_data_prediction[ensemble_index] = self.predict_with_model(self.dataset, 
                                                                                 ensemble_index = ensemble_index, 
@@ -518,16 +620,28 @@ class TrainEvaluate_NN:
                                                                                 use_log_loss=self.use_log_loss)
 
         
+        # TRAINING inputs
+        self.score_den_training = self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0]
+        self.weight_den_training   = self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0]
+        self.score_num_training = self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1]
+        self.weight_num_training   = self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1]
+
+        # HOLDOUT inputs
+        self.score_den_holdout = self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0]
+        self.weight_den_holdout   = self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0]
+        self.score_num_holdout = self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1]
+        self.weight_num_holdout   = self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1]
+
         # Some diagnostics to ensure numerical stability - min/max must not be exactly 0 or 1
         min_max_values = [
-            (self.sample_name[1], "training", np.amin(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0]), 
-                                              np.amax(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0])),
-            (self.sample_name[0], "training", np.amin(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1]), 
-                                              np.amax(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1])),
-            (self.sample_name[1], "holdout", np.amin(self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0]), 
-                                              np.amax(self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0])),
-            (self.sample_name[0], "holdout", np.amin(self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1]), 
-                                              np.amax(self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1]))
+            (self.sample_name[1], "training", np.amin(self.score_den_training), 
+                                              np.amax(self.score_den_training)),
+            (self.sample_name[0], "training", np.amin(self.score_num_training), 
+                                              np.amax(self.score_num_training)),
+            (self.sample_name[1], "holdout", np.amin(self.score_den_holdout), 
+                                              np.amax(self.score_den_holdout)),
+            (self.sample_name[0], "holdout", np.amin(self.score_num_holdout), 
+                                              np.amax(self.score_num_holdout))
         ]
         
         for name, training_holdout_label, min_val, max_val in min_max_values:
@@ -539,31 +653,6 @@ class TrainEvaluate_NN:
                 raise Warning(f"WARNING: {name} {training_holdout_label} data has max score = 1 for ensemble member {ensemble_index}, which may indicate numerical instability!")            
 
 
-
-    def get_trained_model(self, path_to_models, ensemble_index=''):
-        '''
-        Method to load the trained model
-
-        path_to_models: path to the directory with saved model config files
-        '''
-        json_file = open(path_to_models+f'/model_arch{ensemble_index}.json', "r")
-
-        loaded_model_json = json_file.read()
-
-        json_file.close()
-
-        model = model_from_json(loaded_model_json)
-
-        model.load_weights(path_to_models+f'/model_weights{ensemble_index}.weights.h5')
-
-        opt = tf.keras.optimizers.Nadam(learning_rate=0.1)
-
-        model.compile(loss='binary_crossentropy', optimizer=opt)
-
-        scaler = load(path_to_models+f'/model_scaler{ensemble_index}.bin')
-
-        return scaler, model
-
     
     def predict_with_model(self, data, ensemble_index = 0, use_log_loss=False):
         '''
@@ -571,10 +660,13 @@ class TrainEvaluate_NN:
 
         data: the dataset to evaluate trained model on
         '''
-        scaled_data = self.scaler[ensemble_index].transform(data[self.features])
-        pred = self.model_NN[ensemble_index].predict(scaled_data, 
-                                                     verbose=self.verbose, 
-                                                     batch_size=10_000)
+
+        print(f"model = {self.model_NN[ensemble_index]}")
+
+        pred = predict_with_onnx(data[self.features], 
+                                self.scaler[ensemble_index],
+                                self.model_NN[ensemble_index])
+        
         pred = pred.reshape(pred.shape[0],)
 
         if use_log_loss:
@@ -582,7 +674,7 @@ class TrainEvaluate_NN:
             pred = convert_to_score(pred)
 
         if (self.calibration) & (self.calibration_switch):
-
+    
             pred = self.histogram_calibrator[ensemble_index].cali_pred(pred)
             pred = pred.reshape(pred.shape[0],)
             pred = np.clip(pred, 1e-25, 0.9999999)
@@ -591,35 +683,22 @@ class TrainEvaluate_NN:
             
         return pred
         
-
     def make_overfit_plots(self, ensemble_index=0):
         '''
         Plot predictions for training and holdout to test compatibility
         '''
-
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
-        from nsbi_common_utils.plotting import plot_overfit
+        from nsbi_common_utils.plotting import plot_overfit_side_by_side
 
-        plot_overfit(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
-                     self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
-                     self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
-                     self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
-                    nbins=30, 
-                    plotRange=[0.0,1.0], 
-                    holdout_index=0, 
-                    label=f'{self.sample_name[1]}', 
-                    path_to_figures=self.path_to_figures)
-        
-        plot_overfit(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
-                     self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
-                     self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
-                     self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
-                    nbins=30, 
-                    plotRange=[0.0,1.0], 
-                    holdout_index=0, 
-                    label=f'{self.sample_name[0]}', 
-                    path_to_figures=self.path_to_figures)
-
+        plot_overfit_side_by_side(
+            self.score_den_training, self.score_den_holdout,
+            self.weight_den_training, self.weight_den_holdout,
+            self.score_num_training, self.score_num_holdout,
+            self.weight_num_training, self.weight_num_holdout,
+            nbins=30, plotRange=[0.0, 1.0], holdout_index=0,
+            labels=(f'{self.sample_name[1]}', f'{self.sample_name[0]}'),
+            path_to_figures=self.path_to_figures
+        )
 
     def make_calib_plots(self, observable='score', nbins=10, ensemble_index=0):
         '''
@@ -632,28 +711,28 @@ class TrainEvaluate_NN:
 
         if observable=='score':
             # Plot Calibration curves - score function
-            plot_calibration_curve(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
-                                   self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
-                                   self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
-                                   self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
-                                   self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
-                                   self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
-                                   self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
-                                   self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
+            plot_calibration_curve(self.score_den_training, 
+                                   self.weight_den_training, 
+                                   self.score_num_training, 
+                                   self.weight_num_training, 
+                                   self.score_den_holdout, 
+                                   self.weight_den_holdout, 
+                                   self.score_num_holdout, 
+                                   self.weight_num_holdout, 
                                    self.path_to_figures, 
                                    nbins=nbins, 
                                    label="Calibration Curve - "+str(self.sample_name[0]))
 
         elif observable=='llr':
             # Plot Calibration curves - nll function
-            plot_calibration_curve_ratio(self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
-                                        self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
-                                        self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
-                                        self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
-                                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
-                                        self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
-                                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
-                                        self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
+            plot_calibration_curve_ratio(self.score_den_training, 
+                                        self.weight_den_training, 
+                                        self.score_num_training, 
+                                        self.weight_num_training, 
+                                        self.score_den_holdout, 
+                                        self.weight_den_holdout, 
+                                        self.score_num_holdout, 
+                                        self.weight_num_holdout, 
                                         self.path_to_figures, 
                                         nbins=nbins, 
                                         label="Calibration Curve - "+str(self.sample_name[0]))
@@ -661,8 +740,7 @@ class TrainEvaluate_NN:
         else:
             raise Exception("observable not recognized - choose between score and llr options")
 
-
-    def make_reweighted_plots(self, variables, scale, num_bins, ensemble_index = 0):
+    def make_reweighted_plots(self, variables, scale, num_bins, ensemble_index=0):
         '''
         Test the quality of the NN predicted density ratios using a reweighting check p_A/p_B * p_B ~ p_A
 
@@ -673,21 +751,40 @@ class TrainEvaluate_NN:
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
         from nsbi_common_utils.plotting import plot_reweighted
 
-        plot_reweighted(self.dataset.iloc[self.train_idx[ensemble_index]].copy(), 
-                        self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
-                        self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==0], 
-                        self.full_data_prediction[ensemble_index][self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1], 
-                        self.weights[self.train_idx[ensemble_index]][self.training_labels[self.train_idx[ensemble_index]]==1],
+        plot_reweighted(
+            self.dataset_training, self.score_den_training, self.weight_den_training, self.score_num_training, self.weight_num_training,
+            self.dataset_holdout, self.score_den_holdout, self.weight_den_holdout, self.score_num_holdout, self.weight_num_holdout,
+            variables=variables, num=num_bins, sample_name=self.sample_name,
+            scale=scale, path_to_figures=self.path_to_figures,
+            label_left='Training Data Diagnostic', label_right='Holdout Data Diagnostic'
+        )
+
+    def make_reweighted_plots_old(self, variables, scale, num_bins, ensemble_index = 0):
+        '''
+        Test the quality of the NN predicted density ratios using a reweighting check p_A/p_B * p_B ~ p_A
+
+        variables: list of variables to plot
+        scale: linear or log y-axis scales
+        num_bins: number of bins in the reweighting diagnostic plot
+        '''
+        importlib.reload(sys.modules['nsbi_common_utils.plotting'])
+        from nsbi_common_utils.plotting import plot_reweighted
+
+        plot_reweighted(self.dataset_training, 
+                        self.score_den_training, 
+                        self.weight_den_training, 
+                        self.score_num_training, 
+                        self.weight_num_training,
                         variables=variables, 
                         num=num_bins,
                         sample_name=self.sample_name, scale=scale,  
                         path_to_figures=self.path_to_figures, label='Training Data Diagnostic')
 
-        plot_reweighted(self.dataset.iloc[self.holdout_idx[ensemble_index]].copy(), 
-                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0], 
-                        self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==0],
-                        self.full_data_prediction[ensemble_index][self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1], 
-                        self.weights[self.holdout_idx[ensemble_index]][self.training_labels[self.holdout_idx[ensemble_index]]==1],
+        plot_reweighted(self.dataset_holdout, 
+                        self.score_den_holdout, 
+                        self.weight_den_holdout,
+                        self.score_num_holdout, 
+                        self.weight_num_holdout,
                         variables=variables, 
                         num=num_bins,
                         sample_name=self.sample_name, scale=scale, 
@@ -752,9 +849,11 @@ class TrainEvaluate_NN:
 
         else:
             raise Exception("aggregation_type not recognized, please choose between median_ratio, mean_ratio, median_score or mean_score")
-        
-        np.save(f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy", ratio_ensemble)
-        print(f"Density ratios saved")
+
+        saved_ratio_path = f"{self.path_to_ratios}ratio_{self.sample_name[0]}.npy"
+        np.save(saved_ratio_path, ratio_ensemble)
+
+        return saved_ratio_path
         
 
 def build_model(n_hidden=4, 

@@ -15,7 +15,7 @@ Start by creating and activating a conda environment using the provided `environ
 
 ```console
 conda env create -f environment.yml
-conda activate NSBI
+conda activate nsbi_env
 ```
 
 Now, install the custom `nsbi-common-utils` library into the NSBI conda environment:
@@ -28,7 +28,7 @@ This should be followed by creating a Jupyter kernel for the environment so that
 
 ```console
 conda install ipykernel
-python -m ipykernel install --user --name NSBI --display-name "NSBI"
+python -m ipykernel install --user --name nsbi_env --display-name "nsbi_env"
 ```
 
 As an alternative, the ```pixi.lock``` file, together with the ```[pixi]``` specifications in ```pyproject.toml```, allow to create a pixi workspace to work with. 

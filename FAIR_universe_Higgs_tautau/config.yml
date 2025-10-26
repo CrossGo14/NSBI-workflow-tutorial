@@ -1,88 +1,203 @@
-# Base path to save/load data from
-path_prefix : '/home/jaySandesara/NSBI_workflow_tutorial/FAIR_universe_Higgs_tautau/'
+General:
+      Measurement    : higgs_tautau_signal_strength
+      POI            : mu_htautau
 
-# Cache name
-path_saved_data: 'cached_data/'
+Samples:
+    - Name              : htautau
+      Tree              : tree_htautau
+      SamplePath        : saved_datasets/dataset_nominal.root
+      Weight            : weights
+      UseAsReference    : True
+      UseAsBasis        : True
 
-# Directory where pre-selection model is saved
-path_preselection_NN_model: 'preselection_saved_NN/'
+    - Name              : ttbar
+      Tree              : tree_ttbar
+      SamplePath        : saved_datasets/dataset_nominal.root
+      Weight            : weights
+      UseAsReference    : True
+      UseAsBasis        : True
+        
+    - Name : ztautau
+      Tree              : tree_ztautau
+      SamplePath        : saved_datasets/dataset_nominal.root
+      Weight            : weights
+      UseAsReference    : False
+      UseAsBasis        : True
 
-# Features to use for training NNs
-features : ['DER_mass_transverse_met_lep',
-       'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
-       'DER_pt_ratio_lep_had', 'DER_met_phi_centrality']
+NormFactors:
+  - Name: "mu_htautau"
+    Samples: "htautau"
+    Nominal: 1
+    Bounds: [0, 10]
+  - Name: "mu_ztautau"
+    Samples: "ztautau"
+    Nominal: 1
+    Bounds: [0, 10]
+  - Name: "mu_ttbar"
+    Samples: "ttbar"
+    Nominal: 1
+    Bounds: [0, 10]
+    
+Systematics:
+    -   Name                : JES
+        Type                : NormPlusShape
+        Nominal             : 0
+        Samples             : 
+              - htautau
+              - ztautau
+              - ttbar
+        Up                  : 
+            -   SampleName        : htautau
+                Path              : saved_datasets/dataset_JES_up.root
+                Tree              : tree_htautau
+                Weight            : weights
+            -   SampleName        : ztautau
+                Path              : saved_datasets/dataset_JES_up.root
+                Tree              : tree_ztautau
+                Weight            : weights
+            -   SampleName        : ttbar
+                Path              : saved_datasets/dataset_JES_up.root
+                Tree              : tree_ttbar
+                Weight            : weights
+        Dn                  :
+            -   SampleName        : htautau
+                Path              : saved_datasets/dataset_JES_dn.root
+                Tree              : tree_htautau
+                Weight            : weights
+            -   SampleName        : ztautau
+                Path              : saved_datasets/dataset_JES_dn.root
+                Tree              : tree_ztautau
+                Weight            : weights
+            -   SampleName        : ttbar
+                Path              : saved_datasets/dataset_JES_dn.root
+                Tree              : tree_ttbar
+                Weight            : weights
+    -   Name                : TES
+        Type                : NormPlusShape
+        Nominal             : 0
+        Samples             : 
+              - htautau
+              - ztautau
+              - ttbar
+        Up                  :
+            -   SampleName        : htautau
+                Path              : saved_datasets/dataset_TES_up.root
+                Tree              : tree_htautau
+                Weight            : weights
+            -   SampleName        : ztautau
+                Path              : saved_datasets/dataset_TES_up.root
+                Tree              : tree_ztautau
+                Weight            : weights
+            -   SampleName        : ttbar
+                Path              : saved_datasets/dataset_TES_up.root
+                Tree              : tree_ttbar
+                Weight            : weights
+        Dn                  :
+            -   SampleName        : htautau
+                Path              : saved_datasets/dataset_TES_dn.root
+                Tree              : tree_htautau
+                Weight            : weights
+            -   SampleName        : ztautau
+                Path              : saved_datasets/dataset_TES_dn.root
+                Tree              : tree_ztautau
+                Weight            : weights
+            -   SampleName        : ttbar
+                Path              : saved_datasets/dataset_TES_dn.root
+                Tree              : tree_ttbar
+                Weight            : weights
 
-# Features to standardize before training
-features_scaling : ['DER_mass_transverse_met_lep',
-       'log_DER_mass_vis', 'log_DER_pt_h', 'DER_deltar_had_lep', 'log_DER_pt_tot', 'log_DER_sum_pt',
-       'DER_pt_ratio_lep_had', 'DER_met_phi_centrality']
 
+TrainingFeatures:
+    - DER_mass_transverse_met_lep
+    - log_DER_mass_vis
+    - log_DER_pt_h
+    - DER_deltar_had_lep
+    - log_DER_pt_tot
+    - log_DER_sum_pt
+    - DER_pt_ratio_lep_had
+    - DER_met_phi_centrality
+    
+TrainingFeaturesToStandardize:
+    - DER_mass_transverse_met_lep
+    - log_DER_mass_vis
+    - log_DER_pt_h
+    - DER_deltar_had_lep
+    - log_DER_pt_tot
+    - log_DER_sum_pt
+    - DER_pt_ratio_lep_had
+    - DER_met_phi_centrality
 
-# Signal processes in the model
-signal_processes : ["htautau"]
+Regions:
+-   Name: CR
+    Filter: presel_score<-1.0
+    Variable: presel_score
+    Type: binned
+    Binning:
+        - -8.747320175170898
+        - -6.810490310192108
+        - -4.873660445213318
+        - -2.9368305802345276
+        - -1.0000007152557373
+-   Name: SR_binned
+    Filter: presel_score>3.75
+    Variable: presel_score
+    Type: binned
+    Binning:
+        - 4.500021934509277
+        - 5.942246437072754
+-   Name            : SR
+    Filter          : presel_score>=-1.0 & presel_score<=3.75
+    Type            : unbinned
+    Variable        : null
+    Binning         : null
+    AsimovWeights   : saved_datasets/asimov_weights.npy
+    TrainedModels:
+        - SampleName    : htautau
+          Nominal   : 
+               Models  : saved_datasets/output_training_nominal/output_model_params_htautau/
+               Ratios  : saved_datasets/output_training_nominal/output_ratios_htautau/ratio_htautau.npy
+          Systematics    :
+             - SystName: TES
+               ModelsUp: saved_datasets/output_training_systematics/output_model_params_htautau_TES_Up/
+               ModelsDn: saved_datasets/output_training_systematics/output_model_params_htautau_TES_Dn/
+               RatiosUp: saved_datasets/output_training_systematics/output_ratios_htautau_TES_Up/ratio_TES_Up.npy
+               RatiosDn: saved_datasets/output_training_systematics/output_ratios_htautau_TES_Dn/ratio_TES_Dn.npy
+             - SystName: JES
+               ModelsUp: saved_datasets/output_training_systematics/output_model_params_htautau_JES_Up/
+               ModelsDn: saved_datasets/output_training_systematics/output_model_params_htautau_JES_Dn/
+               RatiosUp: saved_datasets/output_training_systematics/output_ratios_htautau_JES_Up/ratio_JES_Up.npy
+               RatiosDn: saved_datasets/output_training_systematics/output_ratios_htautau_JES_Dn/ratio_JES_Dn.npy
+        - SampleName    : ttbar
+          Nominal       : 
+                Models  : saved_datasets/output_training_nominal/output_model_params_ttbar/
+                Ratios  : saved_datasets/output_training_nominal/output_ratios_ttbar/ratio_ttbar.npy
+          Systematics    :
+            - SystName: TES
+              ModelsUp: saved_datasets/output_training_systematics/output_model_params_ttbar_TES_Up/
+              ModelsDn: saved_datasets/output_training_systematics/output_model_params_ttbar_TES_Dn/
+              RatiosUp: saved_datasets/output_training_systematics/output_ratios_ttbar_TES_Up/ratio_TES_Up.npy
+              RatiosDn: saved_datasets/output_training_systematics/output_ratios_ttbar_TES_Dn/ratio_TES_Dn.npy
+            - SystName: JES
+              ModelsUp: saved_datasets/output_training_systematics/output_model_params_ttbar_JES_Up/
+              ModelsDn: saved_datasets/output_training_systematics/output_model_params_ttbar_JES_Dn/ 
+              RatiosUp: saved_datasets/output_training_systematics/output_ratios_ttbar_JES_Up/ratio_JES_Up.npy
+              RatiosDn: saved_datasets/output_training_systematics/output_ratios_ttbar_JES_Dn/ratio_JES_Dn.npy
+        - SampleName    : ztautau
+          Nominal       : 
+                Models  : saved_datasets/output_training_nominal/output_model_params_ztautau/
+                Ratios  : saved_datasets/output_training_nominal/output_ratios_ztautau/ratio_ztautau.npy
+          Systematics    :
+             - SystName: TES
+               ModelsUp: saved_datasets/output_training_systematics/output_model_params_ztautau_TES_Up/
+               ModelsDn: saved_datasets/output_training_systematics/output_model_params_ztautau_TES_Dn/
+               RatiosUp: saved_datasets/output_training_systematics/output_ratios_ztautau_TES_Up/ratio_TES_Up.npy
+               RatiosDn: saved_datasets/output_training_systematics/output_ratios_ztautau_TES_Dn/ratio_TES_Dn.npy
+             - SystName: JES
+               ModelsUp: saved_datasets/output_training_systematics/output_model_params_ztautau_JES_Up/
+               ModelsDn: saved_datasets/output_training_systematics/output_model_params_ztautau_JES_Dn/
+               RatiosUp: saved_datasets/output_training_systematics/output_ratios_ztautau_JES_Up/ratio_JES_Up.npy
+               RatiosDn: saved_datasets/output_training_systematics/output_ratios_ztautau_JES_Dn/ratio_JES_Dn.npy
+                           
 
-# Background processes in the model
-background_processes : ["ttbar", "ztautau"]
-
-# choice of reference hypothesis
-# ref_processes : ["htautau"] 
-ref_processes : ["htautau", "ttbar"] 
-
-# mix_model_hypotheses = signal_processes + background_processes for which density ratios need to be estimated
-# mix_model_hypotheses : ["ttbar", "ztautau"]
-mix_model_hypotheses : ["htautau", "ttbar", "ztautau"]
-
-
-# Assign an integer with each of the processes 
-labels_dict:
-  htautau: 0
-  ztautau: 1
-  ttbar: 2
-  # diboson: 3 # exclude low stats diboson sample for now
-
-# float factors multiplying the probabilities in the preselection score observable 
-pre_factor_preselection_score:
-  htautau: 1.0
-  ztautau: 1.0
-  ttbar: 1.0
-
-# Number of unconstrained floating parameters in the inference model
-num_unconstrained_params : 3
-
-list_unconstrained_params : ['mu_higgs', 'mu_ttbar', 'mu_z']
-floating_processes    : ['htautau', 'ttbar', 'ztautau']
-fixed_processes       : []
-
-# labels for the various binned and unbinned channels
-channels_binned : ['SR_binned', 'CR']
-channels_unbinned : ['SR']
-
-# Mapping process to index of the floating parameters
-process_index : 
-    htautau: 
-        - 0
-    ttbar:
-        - 1
-    ztautau: 
-        - 2
-
-
-# Systematics to use for the analysis model
-dict_systs:
-  TES:
-    process:
-      - htautau
-      - ttbar
-      - ztautau
-    directions:
-      - up
-      - dn
-
-  JES:
-    process:
-      - htautau
-      - ttbar
-      - ztautau
-    directions:
-      - up
-      - dn
+                 
+        
