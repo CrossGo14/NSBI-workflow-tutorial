@@ -74,9 +74,19 @@ class ConfigManager:
 
         
     def get_training_features(self):
-
         return self.config['TrainingFeatures'], self.config['TrainingFeaturesToStandardize']
 
+    def get_analysis_region_cuts(self):
+        regions_list = list(self.config["Regions"])
+        region_names            = []
+        region_selections       = []
+        for region_dict in regions_list:
+            region_name         = region_dict["Name"]
+            region_selection    = region_dict["Filter"]
+            region_selections.append(region_selection)
+            region_names.append(region_name)
+        return region_names, region_selections
+    
     def add_channel(
         self,
         channel_name: str,

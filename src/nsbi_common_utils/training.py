@@ -30,11 +30,10 @@ from joblib import dump, load
 
 import pickle 
 
-from nsbi_common_utils.plotting import plot_loss, plot_all_features
 from nsbi_common_utils.calibration import HistogramCalibrator
 
 importlib.reload(sys.modules['nsbi_common_utils.plotting'])
-from nsbi_common_utils.plotting import plot_all_features
+from nsbi_common_utils.plotting import plot_loss, plot_all_features, plot_all_features, plot_reweighted, plot_calibration_curve, plot_calibration_curve_ratio
 
 from joblib import dump, load
 
@@ -750,9 +749,9 @@ class TrainEvaluate_NN:
         num_bins: number of bins in the reweighting diagnostic plot
         '''
         importlib.reload(sys.modules['nsbi_common_utils.plotting'])
-        from nsbi_common_utils.plotting import plot_reweighted_side_by_side
+        from nsbi_common_utils.plotting import plot_reweighted
 
-        plot_reweighted_side_by_side(
+        plot_reweighted(
             self.dataset_training, self.score_den_training, self.weight_den_training, self.score_num_training, self.weight_num_training,
             self.dataset_holdout, self.score_den_holdout, self.weight_den_holdout, self.score_num_holdout, self.weight_num_holdout,
             variables=variables, num=num_bins, sample_name=self.sample_name,

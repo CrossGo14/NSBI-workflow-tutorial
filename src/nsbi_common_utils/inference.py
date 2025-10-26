@@ -170,16 +170,18 @@ class inference:
                 NLL_value_StatOnly,
                 linestyle="--",
                 label="Stat Only",
+                color='black'
             )
             ax.plot(
                 scan_points,
                 NLL_value,
                 label="Stat+Syst",
+                color='black'
             )
             ax.legend()
 
         else:
-            ax.plot(scan_points, NLL_value, label="")
+            ax.plot(scan_points, NLL_value, label="", color="black")
             
         ax.set_ylim(bottom=0.0)
         ax.set_xlabel(parameter_label or parameter_name)

@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-#keras.models.Model.predict_proba = keras.models.Model.predict
 from numpy import asarray
 from numpy import savetxt
 from numpy import loadtxt
@@ -225,7 +224,7 @@ def plot_calibration_curve_ratio(
     plt.clf()
 
 
-def plot_reweighted_side_by_side(
+def plot_reweighted(
     dataset_train, score_den_train, weight_den_train, score_num_train, weight_num_train,
     dataset_holdout, score_den_holdout, weight_den_holdout, score_num_holdout, weight_num_holdout,
     path_to_figures="", num=15, variables=['NN_MELA_incl_disc'],
@@ -233,8 +232,7 @@ def plot_reweighted_side_by_side(
     label_left='Training Data Diagnostic', label_right='Holdout Data Diagnostic'
 ):
     """
-    Draw training (left) and holdout (right) reweighting plots side-by-side.
-    Layout only; plotting aesthetics and math identical to the original `plot_reweighted`.
+    Draw training (left) and holdout (right) reweighting diagnostic plots side-by-side..
     """
 
     # Helper that reproduces original per-panel computations
