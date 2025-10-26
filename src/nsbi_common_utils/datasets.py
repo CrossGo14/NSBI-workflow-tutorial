@@ -10,10 +10,21 @@ from nsbi_common_utils.configuration import ConfigManager
 
 class datasets:
 
+    """Lightweight helper for reading ROOT TTrees into pandas DataFrames (via uproot),
+    applying region filters from a config, merging/labeling for ML training, and
+    writing updated trees back to ROOT files."""
+
     def __init__(self, 
                 config_path: Union[pathlib.Path, str], 
                 branches_to_load: List):
+        """Load analysis config and set the base list of branches to read.
 
+        Args:
+            config_path: Path to a YAML/JSON config consumed by ConfigManager.
+            branches_to_load: Required list of TTree branches to import.
+        Raises:
+            Exception: If branches_to_load is empty.
+        """
         self.config              = ConfigManager(file_path_string = config_path)
         
         if len(branches_to_load) == 0:
@@ -23,7 +34,22 @@ class datasets:
 
     def load_datasets_from_config(self,
                                 load_systematics = False):
+        """Read datasets defined in config into nested dictionaries of DataFrames.
 
+        Structure:
+            {
+              "Nominal": {sample_name: pd.DataFrame, ...},
+              "<Syst>_Up": {...}, "<Syst>_Dn": {...}  # if requested
+            }
+
+        Notes:
+            - Adds a 'sample_name' column and ensures a 'weights' column
+              (renaming per config 'Weight' when present, else defaults to 1.0).
+        Args:
+            load_systematics: If True, also load 'NormPlusShape' systematics.
+        Returns:
+            Dict[str, Dict[str, pd.DataFrame]]: datasets by type (nominal vs systematics) then sample.
+        """
         dict_datasets = {}
         dict_datasets["Nominal"] = {}
 
@@ -81,20 +107,30 @@ class datasets:
 
     def add_appended_branches(self, 
                               branches: List):
+        """
+        Declare additional, derived branches to carry through on save.
 
+        Args:
+            branches: New branch names to append to the saved schema.
+        """
         self.branches_all           = self.branches_to_load + branches
-
 
     def save_datasets(self,
                     dict_datasets,
                     save_systematics = False):
+        """
+        Write DataFrames back into their ROOT files, preserving other TTrees.
 
+        Args:
+            dict_datasets: Nested dict from load_datasets_from_config().
+            save_systematics: If True, also write available syst variations.
+        """
         for dict_sample in self.config.config["Samples"]:
 
             path_to_root_file   = dict_sample["SamplePath"]
             tree_name           = dict_sample["Tree"]
             sample_name         = dict_sample["Name"]
-            self._save_dataset(dict_datasets["Nominal"][sample_name], 
+            self._save_dataset_to_ntuple(dict_datasets["Nominal"][sample_name], 
                                 path_to_root_file, 
                                 tree_name)
 
@@ -115,15 +151,26 @@ class datasets:
                             if sample_name not in dict_datasets[syst_name_var].keys(): continue
 
                             tree_name           = dict_sample["Tree"]
-                            self._save_dataset(dict_datasets[syst_name_var][sample_name],
-                                                path_to_root_file, 
-                                                tree_name)
+                            self._save_dataset_to_ntuple(dict_datasets[syst_name_var][sample_name],
+                                                        path_to_root_file, 
+                                                        tree_name)
 
-    def _save_dataset(self,
-                    dataset, 
-                    path_to_root_file: str, 
-                    tree_name: str):
+    def _save_dataset_to_ntuple(self,
+                                dataset, 
+                                path_to_root_file: str, 
+                                tree_name: str):
+        """
+        Replace a specific TTree with DataFrame contents.
 
+        Behavior:
+            - Keeps other trees intact by copying them over.
+            - Ensures 'weights' exists in the saved branch list.
+
+        Args:
+            dataset: DataFrame to write (columns = branches).
+            path_to_root_file: Destination ROOT file.
+            tree_name: Name of the tree to overwrite.
+        """
         if "weights" not in self.branches_all:
             self.branches_all =  self.branches_all + ["weights"]
         dataset = dataset[self.branches_all]
@@ -146,7 +193,15 @@ class datasets:
     def filter_region_by_type(self,
                              dataset: Dict[str, Dict[str, pd.DataFrame]],
                              region: str) -> Dict[str, Dict[str, pd.DataFrame]]:
+        """
+        Apply region filters
 
+        Args:
+            dataset: dict[type_name][sample_name] -> DataFrame.
+            region: Config channel name to query against.
+        Returns:
+            Same structure with rows filtered per region expression.
+        """
         for type_name, type_dict in dataset.items():
             dataset[type_name] = self.filter_region_dataset(type_dict, region = region)
 
@@ -155,7 +210,15 @@ class datasets:
     def filter_region_dataset(self,
                               dataset: Dict[str, pd.DataFrame],
                               region: str) -> Dict[str, pd.DataFrame]:
+        """
+        Apply config-defined query string to each sample's DataFrame.
 
+        Args:
+            dataset: dict[sample_name] -> DataFrame.
+            region: Config channel name to look up filters for.
+        Returns:
+            New dict with filtered DataFrames (copy).
+        """
         region_filters = self.config.get_channel_filters(channel_name = region)
         for sample_name, sample_dataframe in dataset.items():
             dataset[sample_name] = sample_dataframe.query(region_filters).copy()
@@ -165,7 +228,18 @@ class datasets:
                                         dataset_dict, 
                                         label_sample_dict: Union[dict[str, int], None] = None,
                                         samples_to_merge = []):
-
+        """
+        Concatenate selected samples; optionally add normalized weights + labels. 
+        The returned sample is ready for training.
+        Args:
+            dataset_dict: dict[sample_name] -> DataFrame.
+            label_sample_dict: Optional mapping of sample_name -> class id.
+            samples_to_merge: List of sample names to include.
+        Returns:
+            pd.DataFrame: merged (and optionally labeled/normalized) dataset.
+        Raises:
+            Exception: If samples_to_merge is empty.
+        """
         if len(samples_to_merge) == 0:
             raise Exception
 
@@ -186,7 +260,19 @@ class datasets:
     def _add_normalised_weights_and_train_label_class(self,
                                                     dataset, 
                                                     label_sample_dict: dict[str, int]):
+        """
+        Add per-class normalized weights and integer training labels.
 
+        Process:
+            - 'train_labels' set per sample_name using label_sample_dict.
+            - 'weights_normed' scaled so each class sums to 1.0.
+
+        Args:
+            dataset: Input DataFrame with 'sample_name' and 'weights'.
+            label_sample_dict: Mapping sample_name -> class id.
+        Returns:
+            pd.DataFrame with 'train_labels' and 'weights_normed' columns.
+        """
         dataset['weights_normed']       = dataset['weights'].to_numpy()
         dataset['train_labels']         = -999
 
@@ -212,7 +298,14 @@ class datasets:
 def save_dataframe_as_root(dataset        : pd.DataFrame,
                            path_to_save   : str,
                            tree_name      : str) -> None:
+    """
+    Utility: create/overwrite a ROOT file with a single TTree from a DataFrame.
 
+    Args:
+        dataset: DataFrame to serialize (all columns become branches).
+        path_to_save: Target ROOT file path.
+        tree_name: Name of the TTree to create.
+    """
     with uproot.recreate(f"{path_to_save}") as ntuple:
 
         arrays = {col: dataset[col].to_numpy() for col in dataset.columns}
@@ -223,7 +316,16 @@ def save_dataframe_as_root(dataset        : pd.DataFrame,
 def load_dataframe_from_root(path_to_load      : str,
                            tree_name         : str,
                            branches_to_load  : list) -> pd.DataFrame:
+    """
+    Utility: read selected branches from a ROOT TTree into a DataFrame.
 
+    Args:
+        path_to_load: Source ROOT file path.
+        tree_name: TTree name inside the file.
+        branches_to_load: Branch names to read.
+    Returns:
+        pd.DataFrame containing the requested branches.
+    """
     with uproot.open(f"{path_to_load}:{tree_name}") as tree:
             dataframe = tree.arrays(branches_to_load, library="pd")
 
