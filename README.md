@@ -11,32 +11,16 @@
 
 ## Setup
 
-Start by creating and activating a conda environment using the provided `environment.yml` environment configuration file:
-
-```console
-conda env create -f environment.yml
-conda activate nsbi_env
+We will use `pixi` to setup the environment for the workflow. The specifications are defined in the `pixi.toml` file. If `pixi` is not installed on your machine follow the instructions in [pixi seutp guide](https://pixi.sh/latest/installation/). Then proceed to install the environment with:
 ```
-
-Now, install the custom `nsbi-common-utils` library into the NSBI conda environment:
-
-```console
-python -m pip install .
+pixi install -e nsbi-env-gpu
 ```
+Currently the environment can only be built on machines with GPU. 
 
-This should be followed by creating a Jupyter kernel for the environment so that it can be found and picked up by Jupyter Lab instances:
-
-```console
-conda install ipykernel
-python -m ipykernel install --user --name nsbi_env --display-name "nsbi_env"
+A jupyter kernel can then be created by running:
 ```
-
-As an alternative, the ```pixi.lock``` file, together with the ```[pixi]``` specifications in ```pyproject.toml```, allow to create a pixi workspace to work with. 
-If pixi is available on the machine, proceed with 
+pixi run -e nsbi-env-gpu python -m ipykernel install --user --name nsbi-env-gpu --display-name "Python (pixi: nsbi-env-gpu)"
 ```
-pixi install
-```
-A jupyter kernel can be created with the same commands reported above.
 
 ## Introduction
 
