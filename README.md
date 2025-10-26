@@ -24,7 +24,7 @@ pixi run -e nsbi-env-gpu python -m ipykernel install --user --name nsbi-env-gpu 
 
 ## Introduction
 
-The notebooks presented here aim to serve as a scaled-down and simplified tutorial for the workflow building related to the NSBI analysis recently published by ATLAS:
+The notebooks presented here aim to serve as a guide to use the `nsbi-common-utils` library being developed (currently not deployed to PyPi). The core model and workflow is related to the NSBI analysis recently published by ATLAS:
 
 <br/>
 
@@ -42,9 +42,7 @@ The notebooks presented here aim to serve as a scaled-down and simplified tutori
 <br/>
 <br/>
 
-The aim is to demonstrate the workflow associated with a full-scale LHC analysis. The physics results presented in the notebooks only serve as examples of the workflow. The code in this tutorial is partially derived from the original ATLAS analysis code written by Jay Sandesara [[git](https://github.com/JaySandesara)], R.D. Schaffer [[git](https://gitlab.cern.ch/schaffer)] and Arnaud Maury [[git](https://github.com/Maury98)].
-
-**Note: The tutorial is a scaled down version of the original workflow.**
+The aim is to demonstrate the usage of `nsbi-common-utils` applied to a full-scale LHC analysis. The physics results presented in the notebooks only serve as examples of the workflow. The code in this tutorial is partially derived from the original ATLAS analysis code written by Jay Sandesara [[git](https://github.com/JaySandesara)], R.D. Schaffer [[git](https://gitlab.cern.ch/schaffer)] and Arnaud Maury [[git](https://github.com/Maury98)].
 
 The workflow currently uses the ttbar open data released by CMS, and the Higgs to tau tau dataset from FAIR universe challenge. More open datasets will be added in the future. 
 
@@ -58,12 +56,13 @@ python -m pip install --upgrade 'nsbi-common-utils @ git+https://github.com/iris
 
 Workflow bluprint (**tentative**):
 
-![NSBI_flowchart](https://github.com/user-attachments/assets/98c6ebbe-c9d2-49fb-bc98-2b8f3b27b1e1)
+![NSBI_flowchart](https://github.com/user-attachments/assets/f9bd85be-10d8-487b-a7ed-1bdd3028fb4e)
 
 ## Acknowledgements
 
 [![NSF-1836650](https://img.shields.io/badge/NSF-1836650-blue.svg)](https://nsf.gov/awardsearch/showAward?AWD_ID=1836650)
 [![PHY-2323298](https://img.shields.io/badge/PHY-2323298-blue.svg)](https://nsf.gov/awardsearch/showAward?AWD_ID=2323298)
+
 
 This work is being supported by the U.S. National Science Foundation (NSF) cooperative agreements [OAC-1836650](https://nsf.gov/awardsearch/showAward?AWD_ID=1836650) and [PHY-2323298](https://nsf.gov/awardsearch/showAward?AWD_ID=2323298) (IRIS-HEP).
 
