@@ -42,7 +42,7 @@ The notebooks presented here aim to serve as a guide to use the `nsbi-common-uti
 <br/>
 <br/>
 
-The aim is to demonstrate the usage of `nsbi-common-utils` applied to a full-scale LHC analysis. The physics results presented in the notebooks only serve as examples of the workflow. The code in this tutorial is partially derived from the original ATLAS analysis code written by Jay Sandesara [[git](https://github.com/JaySandesara)], R.D. Schaffer [[git](https://gitlab.cern.ch/schaffer)] and Arnaud Maury [[git](https://github.com/Maury98)].
+We demonstrate the usage of `nsbi-common-utils` applied to a full-scale LHC analysis. The physics results presented in the notebooks only serve as examples of the workflow. The code in this tutorial is partially derived from the original ATLAS analysis code written by Jay Sandesara [[git](https://github.com/JaySandesara)], R.D. Schaffer [[git](https://gitlab.cern.ch/schaffer)] and Arnaud Maury [[git](https://github.com/Maury98)].
 
 The workflow currently uses the ttbar open data released by CMS, and the Higgs to tau tau dataset from FAIR universe challenge. More open datasets will be added in the future. 
 
@@ -53,6 +53,8 @@ To use the library `nsbi_common_utils` developed here in general cases outside o
 ```console
 python -m pip install --upgrade 'nsbi-common-utils @ git+https://github.com/iris-hep/NSBI-workflow-tutorial.git'
 ```
+
+The library tools are steered by a configuration file - an example can be found in the FAIR Universe Challenge workflow [config.yml](https://github.com/iris-hep/NSBI-workflow-tutorial/blob/main/FAIR_universe_Higgs_tautau/config.yml).
 
 Workflow bluprint (**tentative**):
 
